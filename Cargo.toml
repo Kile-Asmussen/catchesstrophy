@@ -16,6 +16,7 @@ include-flate = "0.3.1"
 strum = { version = "0.27.2", features = [ "derive" ] }
 chrono = "0.4.42"
 rootcause = "0.4.2"
+static_init = "1.0.4"
 
 [profile.release]
 opt-level = 3
