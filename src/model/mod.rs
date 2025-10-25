@@ -1,5 +1,6 @@
 use std::sync::LazyLock;
 
+use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 use strum::{EnumIs, FromRepr, VariantNames};
 
 #[allow(non_camel_case_types)]
@@ -18,8 +19,30 @@ pub enum Square {
     a8 = 0o70, b8 = 0o71, c8 = 0o72, d8 = 0o73, e8 = 0o74, f8 = 0o75, g8 = 0o76, h8 = 0o77,
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Squares(u64);
+
+impl Iterator for Squares {
+    type Item = Square;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0 == 0 {
+            None
+        } else {
+            let n = self.0.trailing_zeros();
+            self.0 &= !(1 << n);
+            Square::from_repr(n as u8 & 0x3F)
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.0.count_ones() as usize;
+        (n, Some(n))
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIs)]
 #[repr(u8)]
 pub enum Color {
     WHITE = 0,
@@ -34,7 +57,7 @@ impl Color {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, EnumIs)]
 #[repr(u8)]
 pub enum Piece {
     #[default]
@@ -67,8 +90,8 @@ pub enum Promotion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Castles {
-    EAST = 6,
-    WEST = 7,
+    EAST = 0,
+    WEST = 1,
 }
 
 #[allow(non_camel_case_types)]
@@ -93,16 +116,18 @@ impl From<Promotion> for Special {
 
 impl From<Castles> for Special {
     fn from(value: Castles) -> Self {
-        unsafe { std::mem::transmute(value as u8) }
+        unsafe { std::mem::transmute(value as u8 + Self::EAST as u8) }
     }
 }
 
-#[repr(u8)]
-pub enum Rights {
-    WHITE = 0b0011,
-    BLACK = 0b1100,
-    EAST = 0b0101,
-    WEST = 0b1010,
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Rights(pub u8);
+impl Rights {
+    #[allow(unused)]
+    const START: Rights = Rights(0b1111);
+    #[allow(unused)]
+    const NIL: Rights = Rights(0b0000);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -158,19 +183,20 @@ pub struct BitMove {
     pub piece: Piece,
     pub special: Special,
     pub capture: Piece,
-    pub captured: Square,
+    pub attack: Square,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TransientInfo {
-    pub eps: Option<Square>,
+    pub ep_square: Option<Square>,
     pub halfmove_clock: u8,
-    pub castling_rights: u8,
+    pub rights: Rights,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct BitBoard {
-    pub piece: [u64; 6],
-    pub color: [u64; 2],
+    pub pieces: [u64; 6],
+    pub colors: [u64; 2],
     pub castling: &'static Castling,
     pub hash: u64,
     pub turn: u16,
@@ -178,34 +204,86 @@ pub struct BitBoard {
     pub trans: TransientInfo,
 }
 
+impl PartialEq for BitBoard {
+    fn eq(&self, other: &Self) -> bool {
+        self.pieces == other.pieces
+            && self.colors == other.colors
+            && self.hash == other.hash
+            && self.player == other.player
+            && self.trans.rights == other.trans.rights
+            && self.trans.ep_square == other.trans.ep_square
+    }
+}
+
 #[test]
 fn test() {
     let mut x = BitBoard {
-        piece: [0; 6],
-        color: [0; 2],
+        pieces: [0; 6],
+        colors: [0; 2],
         castling: &CLASSIC_CASTLING,
         hash: 0,
         turn: 1,
         player: Color::WHITE,
         trans: TransientInfo {
-            eps: None,
+            ep_square: None,
             halfmove_clock: 0,
-            castling_rights: 0b1111,
+            rights: Rights::START,
         },
     };
 
-    x.make(BitMove {
+    x.simple_move(BitMove {
         from: Square::a1,
         to: Square::h8,
         piece: Piece::ROOK,
         special: Special::NONE,
         capture: Piece::NONE,
-        captured: Square::h8,
+        attack: Square::h8,
     });
+
+    println!("{:?}", x);
 }
 
 impl BitBoard {
-    pub fn make(&mut self, mv: BitMove) -> TransientInfo {
+    pub fn startpos() {}
+
+    pub fn rehash(&self) -> u64 {
+        use Color::*;
+        use Piece::*;
+
+        let mut res = 0;
+
+        for piece in [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] {
+            let board = &ZOBHASHER.pieces[piece as usize - 1];
+            for sq in Squares(self.pieces[piece as usize - 1]) {
+                res ^= board[sq as usize]
+            }
+        }
+
+        for color in [WHITE, BLACK] {
+            let board = &ZOBHASHER.colors[color as usize - 1];
+            for sq in Squares(self.colors[color as usize - 1]) {
+                res ^= board[sq as usize]
+            }
+        }
+
+        for ix in [0, 1, 2, 3] {
+            if (self.trans.rights.0 & 1 << ix) != 0 {
+                res ^= ZOBHASHER.castling[ix];
+            }
+        }
+
+        if let Some(sq) = self.trans.ep_square {
+            res ^= ZOBHASHER.ep_file[sq as usize & 0x7];
+        }
+
+        if self.player == BLACK {
+            res ^= ZOBHASHER.black_to_move;
+        }
+
+        res
+    }
+
+    pub fn make_move(&mut self, mv: BitMove) -> TransientInfo {
         let res = self.trans;
         self.turn += self.player as u16;
 
@@ -213,47 +291,138 @@ impl BitBoard {
         self.promotion_move(mv);
         self.castling_move(mv);
 
+        self.update_transient(mv);
+
+        self.turn += (self.player == Color::BLACK) as u16;
         self.player = self.player.opp();
         self.hash ^= ZOBHASHER.black_to_move;
-        self.update_transient(mv);
+
         res
     }
 
+    pub fn unmake_move(&mut self, mv: BitMove, trans: TransientInfo) {}
+
+    #[inline]
     fn simple_move(&mut self, mv: BitMove) {
-        if mv.special > Special::EAST {
+        if Special::EAST <= mv.special {
             return;
         }
 
+        let piece = (mv.piece as usize).saturating_sub(1);
         let bits = (1 << mv.from as u8) | (1 << mv.to as u8);
-        let cap = ((mv.capture != Piece::NONE) as u64) << mv.captured as u8;
+        let is_cap = !mv.capture.is_none();
+        let cap_piece = (mv.capture as usize).saturating_sub(1);
+        let cap_bit = 1 << mv.attack as u8;
+        let cap_sq = mv.attack as usize;
+        let player = self.player as usize;
+        let opponent = self.player.opp() as usize;
+        let from = mv.from as usize;
+        let to = mv.to as usize;
 
-        self.piece[mv.piece as usize - 1] ^= bits;
-        self.piece[(mv.capture as usize).saturating_sub(1)] ^= cap;
-        self.color[self.player as usize] ^= bits;
-        self.color[self.player.opp() as usize] ^= cap;
+        self.pieces[piece] ^= bits;
+        self.colors[player] ^= bits;
+        self.colors[opponent] ^= cap_bit;
 
-        self.hash ^= ZOBHASHER.pieces[mv.piece as usize][mv.from as usize];
-        self.hash ^= ZOBHASHER.pieces[mv.piece as usize][mv.to as usize];
-        self.hash ^= ZOBHASHER.pieces[mv.capture as usize][mv.captured as usize];
-        self.hash ^= ZOBHASHER.color[self.player as usize][mv.from as usize];
-        self.hash ^= ZOBHASHER.color[self.player as usize][mv.to as usize];
-        // ??? can we cmov this somehow?
-        self.hash ^= ZOBHASHER.color[self.player.opp() as usize][mv.captured as usize];
+        self.hash ^= ZOBHASHER.pieces[piece][from];
+        self.hash ^= ZOBHASHER.pieces[piece][to];
+        self.hash ^= ZOBHASHER.colors[player][from];
+        self.hash ^= ZOBHASHER.colors[player][to];
+
+        if is_cap {
+            self.pieces[cap_piece] ^= cap_bit;
+            self.hash ^= ZOBHASHER.pieces[cap_piece][cap_sq];
+            self.hash ^= ZOBHASHER.colors[opponent][cap_sq];
+        }
     }
 
+    #[inline]
     fn promotion_move(&mut self, mv: BitMove) {
-        todo!()
+        if mv.special < Special::KNIGHT || Special::QUEEN < mv.special {
+            return;
+        }
+
+        let pawn = Piece::PAWN as usize;
+        let piece = (mv.piece as usize).saturating_sub(1);
+        let bit = 1 << mv.to as u8;
+        let to = mv.to as usize;
+
+        self.pieces[pawn] ^= bit;
+        self.pieces[piece] ^= bit;
+
+        self.hash ^= ZOBHASHER.pieces[pawn][to];
+        self.hash ^= ZOBHASHER.pieces[piece][to];
     }
 
+    #[inline]
     fn castling_move(&mut self, mv: BitMove) {
-        todo!()
+        if mv.special < Special::EAST {
+            return;
+        }
+
+        let dir = mv.special as usize - Special::EAST as usize;
+        let rank = 0xFF << if self.player.is_black() { 56 } else { 0 };
+        let king = Piece::KING as usize - 1;
+        let king_move = self.castling.king_move[dir] & rank;
+        let rook = Piece::ROOK as usize - 1;
+        let rook_move = self.castling.rook_move[dir] & rank;
+        let player = self.player as usize;
+
+        self.pieces[king] ^= king_move;
+        self.pieces[rook] ^= rook_move;
+        self.colors[player] ^= king_move;
+        self.colors[player] ^= rook_move;
+
+        self.hash ^= ZOBHASHER.pieces[king][self.castling.king_from as usize];
+        self.hash ^= ZOBHASHER.pieces[king][self.castling.king_to[dir] as usize];
+        self.hash ^= ZOBHASHER.pieces[rook][self.castling.rook_from[dir] as usize];
+        self.hash ^= ZOBHASHER.pieces[rook][self.castling.rook_to[dir] as usize];
     }
 
+    #[inline]
     fn update_transient(&mut self, mv: BitMove) {
-        todo!()
+        let player = self.player as usize;
+        let opponent = self.player.opp() as usize;
+
+        if mv.piece == Piece::KING {
+            let ix = player << 1;
+            let bits = 0x3 << ix;
+            self.trans.rights.0 &= !bits;
+            self.hash ^= ZOBHASHER.castling[ix];
+            self.hash ^= ZOBHASHER.castling[ix + 1];
+        }
+
+        if mv.capture == Piece::ROOK {
+            for dir in [Castles::EAST, Castles::WEST] {
+                let dir = dir as usize;
+                if mv.attack == self.castling.rook_from[dir] {
+                    let ix = dir + (opponent << 1);
+                    let bit = 1 << ix;
+                    self.trans.rights.0 &= !bit;
+                    self.hash ^= ZOBHASHER.castling[ix];
+                }
+            }
+        }
+
+        if mv.capture != Piece::NONE || mv.piece == Piece::PAWN {
+            self.trans.halfmove_clock = 0;
+        }
+
+        if let Some(ep_square) = self.trans.ep_square {
+            let ep_ix = ep_square as u8;
+            self.hash ^= ZOBHASHER.ep_file[(ep_ix & 0x7) as usize];
+        }
+
+        if mv.piece == Piece::PAWN && (mv.from as u8).abs_diff(mv.to as u8) == 16 {
+            let ep_ix = (mv.from as u8).min(mv.to as u8) + 8;
+            self.trans.ep_square = Square::from_repr(ep_ix);
+            self.hash ^= ZOBHASHER.ep_file[(ep_ix & 0x7) as usize];
+        } else {
+            self.trans.ep_square = None;
+        }
     }
 }
 
+#[derive(Debug)]
 pub struct Castling {
     pub rook_move: [u64; 2],
     pub king_move: [u64; 2],
@@ -267,10 +436,10 @@ pub struct Castling {
 }
 
 pub const CLASSIC_CASTLING: Castling = Castling {
-    rook_move: [0; 2],
-    king_move: [0; 2],
-    safety: [0; 2],
-    space: [0; 2],
+    rook_move: [0xA0 | 0xA0 << 56, 0x09 | 0x09 << 56],
+    king_move: [0x50 | 0x50 << 56, 0x14 | 0x14 << 56],
+    safety: [0x70 | 0x70 << 56, 0x1C | 0x1C << 56],
+    space: [0x60 | 0x60 << 56, 0x0E | 0x0E << 56],
     rook_from: [Square::h1, Square::a1],
     rook_to: [Square::d1, Square::f1],
     king_from: Square::e1,
@@ -278,11 +447,49 @@ pub const CLASSIC_CASTLING: Castling = Castling {
     capture_own_rook: false,
 };
 
+fn pi_rng() -> SmallRng {
+    SmallRng::from_seed(*b"3.141592653589793238462643383279")
+}
+
+#[derive(Debug, Clone)]
 pub struct ZobHasher {
-    pub pieces: [[u64; 64]; 7],
-    pub color: [[u64; 64]; 2],
-    pub eps: [u64; 8],
+    pub pieces: [[u64; 64]; 6],
+    pub colors: [[u64; 64]; 2],
+    pub ep_file: [u64; 8],
+    pub castling: [u64; 4],
     pub black_to_move: u64,
 }
 
-pub static ZOBHASHER: LazyLock<ZobHasher> = LazyLock::new(|| todo!());
+impl ZobHasher {
+    fn new() -> Self {
+        let mut pi = pi_rng();
+
+        let mut pieces = [[0; 64]; 6];
+        for piece in &mut pieces {
+            pi.fill(&mut piece[..]);
+        }
+
+        let mut colors = [[0; 64]; 2];
+        for color in &mut colors {
+            pi.fill(&mut color[..]);
+        }
+
+        let mut eps = [0; 8];
+        pi.fill(&mut eps[..]);
+
+        let mut castling = [0; 4];
+        pi.fill(&mut castling[..]);
+
+        let black_to_move = pi.next_u64();
+
+        ZobHasher {
+            pieces,
+            colors,
+            ep_file: eps,
+            castling,
+            black_to_move,
+        }
+    }
+}
+
+pub static ZOBHASHER: LazyLock<ZobHasher> = LazyLock::new(ZobHasher::new);
