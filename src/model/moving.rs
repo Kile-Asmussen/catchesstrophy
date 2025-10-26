@@ -182,9 +182,7 @@ impl BitBoard {
 
     #[inline]
     fn update_transient<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
-        let player = self.player as usize;
-        let opponent = self.player.opp() as usize;
-        let ix = player << 1;
+        let ix = self.player.ix() << 1;
 
         if HASH {
             self.hash ^= zobristhashes.hash_rights(self.trans.rights);
@@ -196,15 +194,13 @@ impl BitBoard {
         }
 
         for (piece, square, color) in
-            [(Some(mv.piece), mv.from, player), (mv.capture, mv.to, opponent)]
+            [(Some(mv.piece), mv.from, self.player), (mv.capture, mv.to, self.player.opp())]
         {
             if piece == Some(ChessMan::ROOK) {
                 for dir in [Castles::EAST, Castles::WEST] {
-                    let dir = dir as usize;
-                    if square == self.castling.rook_from[dir] {
-                        let ix = color << 1 | dir;
-                        let bit = 1 << ix;
-                        self.trans.rights.0 &= !bit;
+                    if square == self.castling.rook_from[dir.ix()] {
+                        let ix = color.ix() << 1 | dir.ix();
+                        self.trans.rights.0 &= !(1 << ix);
                     }
                 }
             }
@@ -222,7 +218,7 @@ impl BitBoard {
 
         if HASH {
             if let Some(ep_square) = self.trans.en_passant {
-                self.hash ^= zobristhashes.hash_file(ep_square as u8);
+                self.hash ^= zobristhashes.hash_file(ep_square.square as u8);
             }
         }
     }

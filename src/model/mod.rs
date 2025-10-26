@@ -34,6 +34,7 @@ impl Square {
         self as usize
     }
 
+    #[inline]
     pub fn from_u8(ix: u8) -> Self {
         unsafe { std::mem::transmute(ix & 0x3F) }
     }
@@ -408,7 +409,7 @@ pub struct Castling {
     pub safety: [u64; 2],
     pub space: [u64; 2],
     pub rook_from: [Square; 2],
-    pub capture_own_rook: bool,
+    pub chess960: bool,
 }
 
 pub const CLASSIC_CASTLING: Castling = Castling {
@@ -417,7 +418,7 @@ pub const CLASSIC_CASTLING: Castling = Castling {
     safety: [0x7000_0000_0000_0070, 0x1C00_0000_0000_001C],
     space: [0x6000_0000_0000_0060, 0x0E00_0000_0000_000E],
     rook_from: [Square::h1, Square::a1],
-    capture_own_rook: false,
+    chess960: false,
 };
 
 #[derive(Debug, Clone)]
