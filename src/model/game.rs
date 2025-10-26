@@ -1,11 +1,14 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hasher,
+};
 
 use crate::model::{
-    BitBoard, Legal, TransientInfo, ZOBHASHER,
+    BitBoard, BitMove, Legal, TransientInfo, ZOBRISTHASHES, ZobristHashes,
     notation::{AlgNotaion, CoordNotation},
 };
 
-struct ChessMove {
+pub struct ChessMove {
     legal: Legal,
     coord: CoordNotation,
     alg: AlgNotaion,
@@ -14,14 +17,15 @@ struct ChessMove {
     post: u64,
 }
 
-struct ChessGame {
-    history: HashMap<u64, u8>,
+pub struct ChessGame {
+    history: HashMap<u64, u8, ZobristHashes>,
     past: Vec<ChessMove>,
     future: VecDeque<ChessMove>,
     start: BitBoard,
     current: BitBoard,
+    moves: Vec<ChessMove>,
 }
 
 fn pick_hash(hash: u64) -> u64 {
-    hash.min(hash ^ ZOBHASHER.black_to_move)
+    hash.min(hash ^ ZOBRISTHASHES.black_to_move)
 }

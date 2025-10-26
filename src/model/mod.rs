@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
-use strum::{EnumIs, FromRepr, VariantNames};
+use strum::{EnumIs, FromRepr, VariantArray, VariantNames};
 
 pub mod attacks;
 pub mod binary;
@@ -44,7 +44,9 @@ impl Color {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, EnumIs)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, EnumIs, VariantArray,
+)]
 #[repr(u8)]
 pub enum Piece {
     #[default]
@@ -147,6 +149,22 @@ pub struct PseudoLegal(BitMove);
 #[repr(transparent)]
 pub struct Legal(BitMove);
 
+trait MoveStatus {
+    fn new(b: BitMove) -> Self;
+}
+
+impl MoveStatus for PseudoLegal {
+    fn new(b: BitMove) -> Self {
+        Self(b)
+    }
+}
+
+impl MoveStatus for Legal {
+    fn new(b: BitMove) -> Self {
+        Self(b)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BitMove {
     pub from: Square,
@@ -211,6 +229,66 @@ impl BitBoard {
         res.hash = res.rehash();
         res
     }
+
+    #[cfg(test)]
+    pub fn sanity_check(&self) {
+        for p1 in Piece::VARIANTS {
+            for p2 in Piece::VARIANTS {
+                let (p1, p2) = (*p1, *p2);
+                if p1 >= p2 {
+                    continue;
+                }
+
+                assert_eq!(
+                    self.pieces[p1 as usize - 1] & self.pieces[p2 as usize - 1],
+                    0,
+                    "{:?} and {:?} overlap",
+                    p1,
+                    p2
+                );
+            }
+        }
+
+        assert_eq!(
+            self.colors[Color::WHITE as usize] | self.colors[Color::BLACK as usize],
+            0,
+            "white and black overlap",
+        );
+
+        let mut white = 0;
+        let mut black = 0;
+        let mut total = 0;
+
+        for p in &self.pieces {
+            let p = *p;
+            white |= self.colors[Color::WHITE as usize] & p;
+            black |= self.colors[Color::BLACK as usize] & p;
+            total |= p;
+        }
+
+        assert_eq!(
+            white,
+            self.colors[Color::WHITE as usize],
+            "sum of white-masked pieces not equal to white"
+        );
+
+        assert_eq!(
+            black,
+            self.colors[Color::BLACK as usize],
+            "disjunction of black-masked pieces not equal to black"
+        );
+
+        assert_eq!(
+            total,
+            white | black,
+            "disjunction of pieces not equal to disjunction of colors"
+        );
+
+        assert_eq!(self.hash, self.rehash(), "procedural hash mismatch");
+    }
+
+    #[cfg(not(test))]
+    pub fn sanity_check(&self) {}
 }
 
 #[derive(Debug)]
@@ -233,7 +311,7 @@ pub const CLASSIC_CASTLING: Castling = Castling {
 };
 
 #[derive(Debug, Clone)]
-pub struct ZobHasher {
+pub struct ZobristHashes {
     pub pieces: [[u64; 64]; 6],
     pub colors: [[u64; 64]; 2],
     pub ep_file: [u64; 8],
@@ -241,7 +319,7 @@ pub struct ZobHasher {
     pub black_to_move: u64,
 }
 
-impl ZobHasher {
+impl ZobristHashes {
     pub fn rng() -> SmallRng {
         SmallRng::from_seed(*b"3.141592653589793238462643383279")
     }
@@ -267,7 +345,7 @@ impl ZobHasher {
 
         let black_to_move = pi.next_u64();
 
-        ZobHasher {
+        ZobristHashes {
             pieces,
             colors,
             ep_file: eps,
@@ -277,4 +355,4 @@ impl ZobHasher {
     }
 }
 
-pub static ZOBHASHER: LazyLock<ZobHasher> = LazyLock::new(ZobHasher::new);
+pub static ZOBRISTHASHES: LazyLock<ZobristHashes> = LazyLock::new(ZobristHashes::new);

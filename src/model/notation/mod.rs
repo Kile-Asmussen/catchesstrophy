@@ -263,8 +263,15 @@ impl Display for AlgCheck {
 
 pub fn show_mask(mask: u64) -> String {
     mask.to_be_bytes()
-        .map(|x| format!("{:08b}", x.reverse_bits()))
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+            format!("{:08b}", x.reverse_bits())
+                .replace('1', "██")
+                .replace('0', "  ")
+                + &(8 - i).to_string()
+        })
+        .collect::<Vec<_>>()
         .join("\n")
-        .replace('1', "██")
-        .replace('0', "  ")
+        + "\na b c d e f g h "
 }

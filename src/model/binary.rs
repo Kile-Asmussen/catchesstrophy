@@ -1,6 +1,37 @@
 use std::simd::{num::SimdUint, u8x2, u64x2, u64x4};
 
-use crate::model::{Square, notation::show_mask};
+use crate::model::{
+    Square,
+    attacks::{PawnVision, PawnsBitBlit, Vision},
+    notation::show_mask,
+};
+
+#[test]
+fn test() {
+    println!("{}", show_mask(queen_diff_obs_simdx4(Square::d4, 0)));
+    println!();
+    println!("{}", show_mask(bishop_diff_obs_simdx2(Square::d4, 0)));
+    println!();
+    println!("{}", show_mask(rook_diff_obs_simdx2(Square::d4, 0)));
+    println!();
+    println!(
+        "{}",
+        show_mask(rook_diff_obs_simdx2(Square::d4, 0) | bishop_diff_obs_simdx2(Square::d4, 0))
+    );
+    println!();
+    println!("{}", show_mask(king_dumbfill_simdx4(1 << Square::d4 as u8)));
+    println!();
+    println!(
+        "{}",
+        show_mask(knight_dumbfill_simdx4(1 << Square::d4 as u8))
+    );
+
+    let d2 = 1 << Square::d2 as u8;
+    println!(
+        "{}",
+        show_mask(PawnsBitBlit::<true>::new(0xF7_0000 | d2).hits(Square::d2, 0xF7_0000))
+    );
+}
 
 #[inline]
 pub fn queen_diff_obs_simdx4(sq: Square, total: u64) -> u64 {
@@ -27,21 +58,55 @@ pub fn bishop_diff_obs_simdx2(sq: Square, total: u64) -> u64 {
 }
 
 #[inline]
+pub fn white_pawn_attack_fill(mask: u64) -> u64 {
+    mask << 7 & !0x8080_8080_8080_8080 | mask << 9 & !0x0101_0101_0101_0101
+}
+
+#[inline]
+pub fn white_pawn_attack_fill_simdx2(mask: u64) -> u64 {
+    (u64x2::splat(mask) << u64x2::from_array([7, 9])
+        & u64x2::from_array([!0x8080_8080_8080_8080, !0x0101_0101_0101_0101]))
+    .reduce_or()
+}
+
+#[inline]
+pub fn white_pawn_advance_fill(mask: u64, empty: u64) -> u64 {
+    mask << 8 & empty | ((mask & 0x0000_0000_0000_FF00) << 8 & empty) << 8 & empty
+}
+
+#[inline]
+pub fn black_pawn_attack_fill(mask: u64) -> u64 {
+    mask >> 7 & !0x0101_0101_0101_0101 | mask >> 9 & !0x8080_8080_8080_8080
+}
+
+#[inline]
+pub fn black_pawn_attack_fill_simdx2(mask: u64) -> u64 {
+    (u64x2::splat(mask) >> u64x2::from_array([7, 9])
+        & u64x2::from_array([!0x0101_0101_0101_0101, !0x8080_8080_8080_8080]))
+    .reduce_or()
+}
+
+#[inline]
+pub fn black_pawn_advance_fill(mask: u64, empty: u64) -> u64 {
+    mask >> 8 & empty | ((mask & 0x00FF_0000_0000_0000) >> 8 & empty) >> 8 & empty
+}
+
+#[inline]
 pub fn king_dumbfill_simdx4(mask: u64) -> u64 {
     let shift = u64x4::from_array([7, 8, 9, 1]);
-    let wrap_up = u64x4::from_array([
+    let wrap_shl = u64x4::from_array([
         !0x8080_8080_8080_8080,
         !0,
         !0x0101_0101_0101_0101,
         !0x0101_0101_0101_0101,
     ]);
-    let wrap_down = u64x4::from_array([
+    let wrap_slr = u64x4::from_array([
         !0x0101_0101_0101_0101,
         !0,
         !0x8080_8080_8080_8080,
         !0x8080_8080_8080_8080,
     ]);
-    (u64x4::splat(mask) << shift & wrap_up | u64x4::splat(mask) >> shift & wrap_down).reduce_or()
+    (u64x4::splat(mask) << shift & wrap_shl | u64x4::splat(mask) >> shift & wrap_slr).reduce_or()
 }
 
 #[inline]
@@ -54,6 +119,20 @@ pub fn knight_dumbfill_simdx4(mask: u64) -> u64 {
         !0x0303_0303_0303_0303,
     ]);
     (u64x4::splat(mask) << shift & wrap | u64x4::splat(mask) >> shift & wrap.reverse()).reduce_or()
+}
+
+#[inline]
+pub fn rook_dumb7fill_simdx2(rooks: u64, empty: u64) -> u64 {
+    let shift = u64x2::from_array([1, 8]);
+    let wrap_shl = u64x2::from_array([!0x0101_0101_0101_0101, !0]);
+    let wrap_shr = u64x2::from_array([!0x8080_8080_8080_8080, !0]);
+
+    let rooks = u64x2::splat(rooks);
+    let mut flood = u64x2::splat(0);
+
+    for _ in 0..5 {}
+
+    0
 }
 
 #[inline]
