@@ -28,6 +28,17 @@ pub enum Square {
     a8 = 0o70, b8 = 0o71, c8 = 0o72, d8 = 0o73, e8 = 0o74, f8 = 0o75, g8 = 0o76, h8 = 0o77,
 }
 
+impl Square {
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize
+    }
+
+    pub fn from_u8(ix: u8) -> Self {
+        unsafe { std::mem::transmute(ix & 0x3F) }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIs)]
 #[repr(u8)]
@@ -38,19 +49,28 @@ pub enum Color {
 
 impl Color {
     #[inline]
-    fn opp(self) -> Self {
+    pub fn opp(self) -> Self {
         unsafe { std::mem::transmute(self as u8 ^ 1) }
+    }
+
+    #[inline]
+    pub fn sign(self) -> i8 {
+        match self {
+            Self::WHITE => 1,
+            Self::BLACK => -1,
+        }
+    }
+
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize
     }
 }
 
 #[allow(non_camel_case_types)]
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, EnumIs, VariantArray,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, VariantArray)]
 #[repr(u8)]
-pub enum Piece {
-    #[default]
-    NONE = 0,
+pub enum ChessMan {
     PAWN = 1,
     KNIGHT = 2,
     BISHOP = 3,
@@ -59,9 +79,62 @@ pub enum Piece {
     KING = 6,
 }
 
-impl From<Promotion> for Piece {
+impl ChessMan {
+    #[inline]
+    fn ix(self) -> usize {
+        self as usize - 1
+    }
+}
+
+impl From<ChessPiece> for ChessMan {
+    #[inline]
+    fn from(value: ChessPiece) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+impl From<ChessPawn> for ChessMan {
+    #[inline]
+    fn from(value: ChessPawn) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+impl From<Promotion> for ChessMan {
+    #[inline]
     fn from(value: Promotion) -> Self {
         unsafe { std::mem::transmute(value) }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum ChessPawn {
+    PAWN = 1,
+}
+
+impl ChessPawn {
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize - 1
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum ChessPiece {
+    KNIGHT = 2,
+    BISHOP = 3,
+    ROOK = 4,
+    QUEEN = 5,
+    KING = 6,
+}
+
+impl ChessPiece {
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize - 1
     }
 }
 
@@ -69,11 +142,17 @@ impl From<Promotion> for Piece {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Promotion {
-    NONE = 0,
     KNIGHT = 2,
     BISHOP = 3,
     ROOK = 4,
     QUEEN = 5,
+}
+
+impl Promotion {
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize - 1
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -83,50 +162,74 @@ pub enum Castles {
     WEST = 1,
 }
 
+impl Castles {
+    pub fn ix(self) -> usize {
+        self as usize
+    }
+}
+
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum Special {
-    #[default]
-    NONE = 0,
-    KNIGHT = 2,
-    BISHOP = 3,
-    ROOK = 4,
-    QUEEN = 5,
-    EAST = 6,
-    WEST = 7,
+    PAWN = 1,   // Double push or EPC
+    KNIGHT = 2, // Promote
+    BISHOP = 3, // Promote
+    ROOK = 4,   // Promote
+    QUEEN = 5,  // Promote
+    EAST = 6,   // Castle
+    WEST = 7,   // Castle
+}
+
+impl From<ChessPawn> for Special {
+    #[inline]
+    fn from(value: ChessPawn) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
 }
 
 impl From<Promotion> for Special {
+    #[inline]
     fn from(value: Promotion) -> Self {
         unsafe { std::mem::transmute(value) }
     }
 }
 
-impl TryFrom<Special> for Promotion {
-    type Error = ();
-    fn try_from(value: Special) -> Result<Self, Self::Error> {
-        if value <= Special::QUEEN {
-            Ok(unsafe { std::mem::transmute(value) })
+impl From<Castles> for Special {
+    #[inline]
+    fn from(value: Castles) -> Self {
+        unsafe { std::mem::transmute(value as u8 + Special::EAST as u8) }
+    }
+}
+
+impl ChessPawn {
+    fn from_special(special: Option<Special>) -> Option<Self> {
+        if special == Some(Special::PAWN) {
+            Some(ChessPawn::PAWN)
         } else {
-            Err(())
+            None
         }
     }
 }
 
-impl From<Castles> for Special {
-    fn from(value: Castles) -> Self {
-        unsafe { std::mem::transmute(value as u8 + Self::EAST as u8) }
+impl Promotion {
+    fn from_special(special: Option<Special>) -> Option<Self> {
+        let special = special?;
+        if Special::KNIGHT <= special && special <= Special::QUEEN {
+            Some(unsafe { std::mem::transmute(special) })
+        } else {
+            None
+        }
     }
 }
 
-impl TryFrom<Special> for Castles {
-    type Error = ();
-    fn try_from(value: Special) -> Result<Self, Self::Error> {
-        if Special::EAST <= value {
-            Ok(unsafe { std::mem::transmute(value) })
+impl Castles {
+    fn from_special(special: Option<Special>) -> Option<Self> {
+        let special = special?;
+        if Special::EAST <= special {
+            Some(unsafe { std::mem::transmute(special as u8 - Special::EAST as u8) })
         } else {
-            Err(())
+            None
         }
     }
 }
@@ -154,12 +257,14 @@ trait MoveStatus {
 }
 
 impl MoveStatus for PseudoLegal {
+    #[inline]
     fn new(b: BitMove) -> Self {
         Self(b)
     }
 }
 
 impl MoveStatus for Legal {
+    #[inline]
     fn new(b: BitMove) -> Self {
         Self(b)
     }
@@ -169,17 +274,22 @@ impl MoveStatus for Legal {
 pub struct BitMove {
     pub from: Square,
     pub to: Square,
-    pub piece: Piece,
-    pub special: Special,
-    pub capture: Piece,
-    pub attack: Square,
+    pub piece: ChessMan,
+    pub special: Option<Special>,
+    pub capture: Option<ChessMan>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TransientInfo {
-    pub ep_square: Option<Square>,
+    pub en_passant: Option<EnPassant>,
     pub halfmove_clock: u8,
     pub rights: Rights,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EnPassant {
+    square: Square,
+    capture: Square,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -200,7 +310,7 @@ impl PartialEq for BitBoard {
             && self.hash == other.hash
             && self.player == other.player
             && self.trans.rights == other.trans.rights
-            && self.trans.ep_square == other.trans.ep_square
+            && self.trans.en_passant == other.trans.en_passant
     }
 }
 
@@ -221,7 +331,7 @@ impl BitBoard {
             turn: 1,
             player: Color::WHITE,
             trans: TransientInfo {
-                ep_square: None,
+                en_passant: None,
                 halfmove_clock: 0,
                 rights: Rights::START,
             },
@@ -232,8 +342,8 @@ impl BitBoard {
 
     #[cfg(test)]
     pub fn sanity_check(&self) {
-        for p1 in Piece::VARIANTS {
-            for p2 in Piece::VARIANTS {
+        for p1 in ChessMan::VARIANTS {
+            for p2 in ChessMan::VARIANTS {
                 let (p1, p2) = (*p1, *p2);
                 if p1 >= p2 {
                     continue;

@@ -10,6 +10,16 @@ use crate::model::{
     },
 };
 
+type DefaultChessMen = ChessMen<
+    PawnsBitBlit<true>,
+    PawnsBitBlit<false>,
+    KnightDumbfill,
+    FastObsDiffBishop,
+    FastObsDiffRook,
+    FastObsDiffQueen,
+    KingDumbfill,
+>;
+
 pub struct ChessMen<WP, BP, N, B, R, Q, K>(u64, PhantomData<(WP, BP, N, B, R, Q, K)>)
 where
     WP: PawnVision,
@@ -22,7 +32,8 @@ where
 
 pub trait Panopticon {
     fn new(total: u64) -> Self;
-    fn pawn(&self, color: Color) -> impl PawnVision;
+    fn white_pawn(&self) -> impl PawnVision;
+    fn black_pawn(&self) -> impl PawnVision;
     fn knight(&self) -> impl PieceVision;
     fn bishop(&self) -> impl PieceVision;
     fn rook(&self) -> impl PieceVision;
@@ -45,11 +56,13 @@ where
     }
 
     #[inline]
-    fn pawn(&self, color: Color) -> impl PawnVision {
-        match color {
-            Color::WHITE => WP::new(self.0),
-            Color::BLACK => WP::new(self.0),
-        }
+    fn white_pawn(&self) -> impl PawnVision {
+        WP::new(self.0)
+    }
+
+    #[inline]
+    fn black_pawn(&self) -> impl PawnVision {
+        WP::new(self.0)
     }
 
     #[inline]
@@ -168,7 +181,7 @@ pub struct FastObsDiffRook(u64);
 impl Vision for FastObsDiffRook {
     #[inline]
     fn new(total: u64) -> Self {
-        Self(total)
+        Self(!total)
     }
 
     #[inline]

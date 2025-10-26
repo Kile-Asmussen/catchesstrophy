@@ -1,9 +1,10 @@
-use std::fmt::Display;
+use std::fmt::{Display, write};
 
 use strum::EnumIs;
 
 use crate::model::{
-    Castles, Castling, Color, Piece, Promotion, Rights, Square, TransientInfo, VariantNames,
+    Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color, EnPassant, Promotion, Rights,
+    Square, TransientInfo, VariantNames,
 };
 
 impl Square {
@@ -22,14 +23,20 @@ impl Display for Square {
     }
 }
 
-impl Display for Piece {
+impl Display for ChessMan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let arr = if f.alternate() {
-            ["", "p", "n", "b", "r", "q", "k"]
+            ["p", "n", "b", "r", "q", "k"]
         } else {
-            ["", "P", "N", "B", "R", "Q", "K"]
+            ["P", "N", "B", "R", "Q", "K"]
         };
-        write!(f, "{}", arr[*self as usize])
+        write!(f, "{}", arr[self.ix()])
+    }
+}
+
+impl Display for ChessPawn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <ChessMan as Display>::fmt(&ChessMan::from(*self), f)
     }
 }
 
@@ -44,7 +51,7 @@ impl Display for Color {
 
 impl Display for Promotion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#}", Piece::from(*self))
+        write!(f, "{:#}", ChessMan::from(*self))
     }
 }
 
@@ -100,18 +107,18 @@ impl Display for TransientInfo {
             f,
             "{} {} {}",
             self.rights,
-            self.ep_square
-                .map(|s| Square::VARIANTS[s as usize])
+            self.en_passant
+                .map(|e| Square::VARIANTS[e.square.ix()])
                 .unwrap_or("-"),
             self.halfmove_clock,
         )
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TransientInfo960 {
     pub rights: Rights960,
-    pub ep_square: Option<Square>,
+    pub en_passant: Option<EnPassant>,
     pub halfmove_clock: u8,
 }
 
@@ -119,7 +126,7 @@ impl TransientInfo960 {
     fn from(t: TransientInfo, c: &Castling) -> Self {
         Self {
             rights: Rights960::from(t.rights, c),
-            ep_square: t.ep_square,
+            ep_square: t.en_passant,
             halfmove_clock: t.halfmove_clock,
         }
     }
@@ -131,8 +138,8 @@ impl Display for TransientInfo960 {
             f,
             "{} {} {}",
             self.rights,
-            self.ep_square
-                .map(|s| Square::VARIANTS[s as usize])
+            self.en_passant
+                .map(|e| Square::VARIANTS[e.square.ix()])
                 .unwrap_or("-"),
             self.halfmove_clock,
         )
@@ -143,12 +150,16 @@ impl Display for TransientInfo960 {
 pub struct CoordNotation {
     pub from: Square,
     pub to: Square,
-    pub prom: Promotion,
+    pub prom: Option<Promotion>,
 }
 
 impl Display for CoordNotation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}{}", self.from, self.to, self.prom)
+        write!(f, "{}{}", self.from, self.to)?;
+        if let Some(prom) = self.prom {
+            write!(f, "{}", prom)?;
+        }
+        Ok(())
     }
 }
 
@@ -174,7 +185,7 @@ pub struct AlgPawn {
     pub from: Square,
     pub to: Square,
     pub capture: bool,
-    pub promote: Promotion,
+    pub promote: Option<Promotion>,
 }
 
 impl Display for AlgPawn {
@@ -194,8 +205,8 @@ impl Display for AlgPawn {
             write!(f, "{}", self.to)?;
         }
 
-        if self.promote != Promotion::NONE {
-            write!(f, "={}", self.promote)?;
+        if let Some(promote) = self.promote {
+            write!(f, "={}", promote)?;
         }
 
         Ok(())
@@ -204,7 +215,7 @@ impl Display for AlgPawn {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AlgPiece {
-    pub piece: Piece,
+    pub piece: ChessPiece,
     pub from: Square,
     pub to: Square,
     pub capture: bool,
@@ -217,13 +228,13 @@ impl Display for AlgPiece {
             write!(
                 f,
                 "{}{}{}{}",
-                self.piece,
+                ChessMan::from(self.piece),
                 self.from,
                 if self.capture { "x" } else { "" },
                 self.to
             )?;
         } else {
-            write!(f, "{}", self.piece)?;
+            write!(f, "{}", ChessMan::from(self.piece))?;
             if self.disambiguate.0 {
                 write!(f, "{}", self.from.file())?;
             }
