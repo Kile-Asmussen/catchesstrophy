@@ -126,7 +126,7 @@ impl TransientInfo960 {
     fn from(t: TransientInfo, c: &Castling) -> Self {
         Self {
             rights: Rights960::from(t.rights, c),
-            ep_square: t.en_passant,
+            en_passant: t.en_passant,
             halfmove_clock: t.halfmove_clock,
         }
     }

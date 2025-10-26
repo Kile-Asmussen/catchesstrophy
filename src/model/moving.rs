@@ -193,9 +193,10 @@ impl BitBoard {
             self.trans.rights.0 &= !bits;
         }
 
-        for (piece, square, color) in
-            [(Some(mv.piece), mv.from, self.player), (mv.capture, mv.to, self.player.opp())]
-        {
+        for (piece, square, color) in [
+            (Some(mv.piece), mv.from, self.player),
+            (mv.capture.map(ChessMan::from), mv.to, self.player.opp()),
+        ] {
             if piece == Some(ChessMan::ROOK) {
                 for dir in [Castles::EAST, Castles::WEST] {
                     if square == self.castling.rook_from[dir.ix()] {

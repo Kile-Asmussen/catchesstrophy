@@ -108,6 +108,13 @@ impl From<Promotion> for ChessMan {
     }
 }
 
+impl From<ChessCommoner> for ChessMan {
+    #[inline]
+    fn from(value: ChessCommoner) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum ChessPawn {
@@ -142,6 +149,24 @@ impl ChessPiece {
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
+pub enum ChessCommoner {
+    PAWN = 1,
+    KNIGHT = 2,
+    BISHOP = 3,
+    ROOK = 4,
+    QUEEN = 5,
+}
+
+impl ChessCommoner {
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize - 1
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
 pub enum Promotion {
     KNIGHT = 2,
     BISHOP = 3,
@@ -164,6 +189,7 @@ pub enum Castles {
 }
 
 impl Castles {
+    #[inline]
     pub fn ix(self) -> usize {
         self as usize
     }
@@ -200,6 +226,13 @@ impl From<Castles> for Special {
     #[inline]
     fn from(value: Castles) -> Self {
         unsafe { std::mem::transmute(value as u8 + Special::EAST as u8) }
+    }
+}
+
+impl From<ChessCommoner> for Special {
+    #[inline]
+    fn from(value: ChessCommoner) -> Self {
+        unsafe { std::mem::transmute(value as u8) }
     }
 }
 
@@ -277,7 +310,7 @@ pub struct BitMove {
     pub to: Square,
     pub piece: ChessMan,
     pub special: Option<Special>,
-    pub capture: Option<ChessMan>,
+    pub capture: Option<ChessCommoner>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
