@@ -1,11 +1,15 @@
 use crate::model::{
-    CLASSIC_CASTLING, Castling, ChessMan, Color, Transients,
-    hash::{ZobristTables, bin_sum},
+    CLASSIC_CASTLING, Castling, ChessMan, Color, Transients, hash::ZobristTables, utils::bin_sum,
 };
 use strum::VariantArray;
 
 pub trait BitBoard: ChessBoard {
     fn xor(&mut self, color: Color, man: ChessMan, mask: u64);
+
+    fn mask(&self, color: Color, man: ChessMan) -> u64;
+
+    fn side(&self, color: Color) -> u64;
+    fn total(&self) -> u64;
 }
 
 pub trait ChessBoard: MetaBoard {
@@ -193,6 +197,18 @@ impl BitBoard for CompactBitBoard {
         self.men[man.ix()] ^= mask;
         self.colors[color.ix()] ^= mask;
     }
+
+    fn mask(&self, color: Color, man: ChessMan) -> u64 {
+        self.men[man.ix()] & self.colors[color.ix()]
+    }
+
+    fn side(&self, color: Color) -> u64 {
+        self.colors[color.ix()]
+    }
+
+    fn total(&self) -> u64 {
+        self.colors[Color::WHITE.ix()] | self.colors[Color::BLACK.ix()]
+    }
 }
 
 impl HasDefaultMetaBoard for CompactBitBoard {
@@ -306,6 +322,21 @@ impl BitBoard for FullBitBoard {
     fn xor(&mut self, color: Color, man: ChessMan, mask: u64) {
         self.masks[color.ix()][man.ix()] ^= mask;
     }
+
+    #[inline]
+    fn mask(&self, color: Color, man: ChessMan) -> u64 {
+        self.masks[color.ix()][man.ix()]
+    }
+
+    #[inline]
+    fn side(&self, color: Color) -> u64 {
+        bin_sum(&self.masks[color.ix()])
+    }
+
+    #[inline]
+    fn total(&self) -> u64 {
+        self.side(Color::WHITE) | self.side(Color::BLACK)
+    }
 }
 
 impl HasDefaultMetaBoard for FullBitBoard {
@@ -381,6 +412,21 @@ impl BitBoard for FullerBitBoard {
         self.bitboard.xor(color, man, mask);
         self.total[color.ix()] ^= mask;
     }
+
+    #[inline]
+    fn mask(&self, color: Color, man: ChessMan) -> u64 {
+        self.bitboard.mask(color, man)
+    }
+
+    #[inline]
+    fn side(&self, color: Color) -> u64 {
+        self.total[color.ix()]
+    }
+
+    #[inline]
+    fn total(&self) -> u64 {
+        bin_sum(&self.total)
+    }
 }
 
 impl HasDefaultMetaBoard for FullerBitBoard {
@@ -405,14 +451,15 @@ impl ChessBoard for FullerBitBoard {
 
     #[cfg(test)]
     fn sanity_check<ZT: ZobristTables>(&self) {
+        self.bitboard.sanity_check::<ZT>();
         assert_eq!(
             self.total[Color::WHITE.ix()],
-            bin_sum(&self.bitboard.masks[Color::WHITE.ix()]),
+            self.bitboard.side(Color::WHITE),
             "white total is not sum of white pieces"
         );
         assert_eq!(
             self.total[Color::BLACK.ix()],
-            bin_sum(&self.bitboard.masks[Color::BLACK.ix()]),
+            self.bitboard.side(Color::BLACK),
             "black total is not sum of black pieces"
         )
     }

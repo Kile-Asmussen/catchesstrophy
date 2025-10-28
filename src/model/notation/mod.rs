@@ -3,8 +3,8 @@ use std::fmt::{Display, write};
 use strum::EnumIs;
 
 use crate::model::{
-    CLASSIC_CASTLING, Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color, EnPassant,
-    Promotion, Square, Transients, VariantNames,
+    BitMove, CLASSIC_CASTLING, Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color,
+    EnPassant, Promotion, Special, Square, Transients, VariantNames,
 };
 
 impl Square {
@@ -262,4 +262,42 @@ pub fn show_mask(mask: u64) -> String {
         .collect::<Vec<_>>()
         .join("\n")
         + "\na b c d e f g h "
+}
+
+trait MoveMatcher {
+    fn matches(self, mv: BitMove) -> bool;
+}
+
+impl MoveMatcher for CoordNotation {
+    fn matches(self, mv: BitMove) -> bool {
+        self.from == mv.from
+            && self.to == mv.to
+            && (self.prom.is_none() || self.prom == Promotion::from_special(mv.special))
+    }
+}
+
+impl MoveMatcher for AlgNotaion {
+    fn matches(self, mv: BitMove) -> bool {
+        match self {
+            Self::Pawn(p, _) => {
+                mv.man == ChessMan::PAWN
+                    && (p.from as u8 & 0x7) == (mv.from as u8 & 0x7)
+                    && p.to == mv.to
+                    && p.capture == mv.capture.is_some()
+                    && p.promote == Promotion::from_special(mv.special)
+            }
+            Self::Piece(p, _) => {
+                mv.man == ChessMan::from(p.piece)
+                    && mv.to == p.to
+                    && p.capture == mv.capture.is_some()
+                    && match p.disambiguate {
+                        (false, false) => true,
+                        (true, false) => (p.from as u8 & 0x7) == (mv.from as u8 & 0x7),
+                        (false, true) => (p.from as u8 & 0x38) == (mv.from as u8 & 0x38),
+                        (true, true) => p.from == mv.from,
+                    }
+            }
+            Self::Caslte(c, _) => mv.special == Some(Special::from(c)),
+        }
+    }
 }

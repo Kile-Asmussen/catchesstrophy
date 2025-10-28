@@ -12,6 +12,7 @@ pub mod mailbox;
 pub mod movegen;
 pub mod moving;
 pub mod notation;
+pub mod utils;
 
 /// Basic square enum
 #[allow(non_camel_case_types)]

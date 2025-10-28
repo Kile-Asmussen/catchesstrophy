@@ -5,7 +5,9 @@ use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 use static_init::Lazy;
 use strum::VariantArray;
 
-use crate::model::{Castles, ChessMan, Color, EnPassant, Square, attacks::PieceVision};
+use crate::model::{
+    Castles, ChessMan, Color, EnPassant, Square, attacks::PieceVision, utils::bin_sum,
+};
 
 pub trait ZobristDetails {
     fn hash_en_passant(&self, ep: Option<EnPassant>) -> u64;
@@ -205,14 +207,6 @@ impl ZobristTables for CompactZobristTables {
 
         res
     }
-}
-
-pub fn bin_sum<const N: usize>(data: &[u64; N]) -> u64 {
-    let mut res = 0;
-    for i in 0..N {
-        res |= data[i];
-    }
-    res
 }
 
 #[derive(Debug, Clone)]
