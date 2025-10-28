@@ -302,6 +302,49 @@ impl ZobristTables for FullZobristTables {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoHashes;
+
+impl ZobristDetails for NoHashes {
+    fn hash_en_passant(&self, ep: Option<EnPassant>) -> u64 {
+        0
+    }
+
+    fn hash_rights(&self, rights: [[bool; 2]; 2]) -> u64 {
+        0
+    }
+
+    fn black(&self) -> u64 {
+        0
+    }
+}
+
+impl ZobristTables for NoHashes {
+    fn static_table() -> &'static Self {
+        &NoHashes
+    }
+
+    fn hash_full(&self, masks: &[[u64; 6]; 2]) -> u64 {
+        0
+    }
+
+    fn hash_compact(&self, colors: &[u64; 2], men: &[u64; 6]) -> u64 {
+        0
+    }
+
+    fn hash_move(&self, player: Color, man: ChessMan, bits: u64) -> u64 {
+        0
+    }
+
+    fn hash_square(&self, player: Color, man: ChessMan, sq: Square) -> u64 {
+        0
+    }
+
+    fn hash_castling(&self, player: Color, king_bits: u64, rook_bits: u64) -> u64 {
+        0
+    }
+}
+
 ///////////////////////////
 // For HashMap ////////////
 ///////////////////////////

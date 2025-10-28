@@ -9,26 +9,30 @@ use crate::model::{
     BitMove, Castles, ChessMan, ChessPawn, ChessPiece, Color, EnPassant, Legal, Promotion, Special,
     Square, Transients,
     bitboard::BitBoard,
-    hash::ZobristTables,
+    hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},
 };
 
-pub trait BitBoardMoves: BitBoard {
+#[allow(private_bounds)]
+pub trait BitBoardMoves: BitBoardMoveComponents {
     fn make_move<ZT: ZobristTables>(&mut self, mv: Legal) -> Transients;
+    fn unmake_move<ZT: ZobristTables>(&mut self, mv: Legal, trans: Transients);
+    fn hash_move<ZT: ZobristTables>(&mut self, mv: BitMove) -> u64;
+    fn fake_move(&mut self, mv: BitMove);
 }
 
-impl<BB: BitBoard> BitBoardMoves for BB {
+impl<BB: BitBoardMoveComponents> BitBoardMoves for BB {
     fn make_move<ZT: ZobristTables>(&mut self, mv: Legal) -> Transients {
         let zobristhashes = ZT::static_table();
 
-        let res = self.0.trans();
+        let res = self.trans();
 
-        self.simple_move::<true, true>(mv.0, zobristhashes);
-        self.promotion_move::<true, true>(mv.0, zobristhashes);
-        self.pawn_special::<true, true>(mv.0, zobristhashes);
-        self.castling_move::<true, true>(mv.0, zobristhashes);
+        self.simple_move::<true, true, ZT>(mv.0, zobristhashes);
+        self.promotion_move::<true, true, ZT>(mv.0, zobristhashes);
+        self.pawn_special::<true, true, ZT>(mv.0, zobristhashes);
+        self.castling_move::<true, true, ZT>(mv.0, zobristhashes);
 
-        self.0.next_ply();
+        self.next_ply();
 
         return res;
     }
@@ -36,45 +40,86 @@ impl<BB: BitBoard> BitBoardMoves for BB {
     fn unmake_move<ZT: ZobristTables>(&mut self, mv: Legal, trans: Transients) {
         let zobristhashes = ZT::static_table();
 
-        self.0.prev_ply();
+        self.prev_ply();
 
-        self.simple_move::<true, true>(mv.0, zobristhashes);
-        self.promotion_move::<true, true>(mv.0, zobristhashes);
-        self.pawn_special::<true, true>(mv.0, zobristhashes);
-        self.castling_move::<true, true>(mv.0, zobristhashes);
+        self.simple_move::<true, true, ZT>(mv.0, zobristhashes);
+        self.promotion_move::<true, true, ZT>(mv.0, zobristhashes);
+        self.pawn_special::<true, true, ZT>(mv.0, zobristhashes);
+        self.castling_move::<true, true, ZT>(mv.0, zobristhashes);
 
-        *self.0.trans_mut() = trans;
+        *self.trans_mut() = trans;
     }
 
     fn hash_move<ZT: ZobristTables>(&mut self, mv: BitMove) -> u64 {
         let zobristhashes = ZT::static_table();
 
-        self.simple_move::<false, true>(mv, zobristhashes)
-            ^ self.promotion_move::<false, true>(mv, zobristhashes)
-            ^ self.pawn_special::<false, true>(mv, zobristhashes)
-            ^ self.castling_move::<false, true>(mv, zobristhashes)
+        self.simple_move::<false, true, ZT>(mv, zobristhashes)
+            ^ self.promotion_move::<false, true, ZT>(mv, zobristhashes)
+            ^ self.pawn_special::<false, true, ZT>(mv, zobristhashes)
+            ^ self.castling_move::<false, true, ZT>(mv, zobristhashes)
     }
 
-    fn fake_move<ZT: ZobristTables>(&mut self, mv: BitMove) {
-        let zobristhashes = ZT::static_table();
-
-        self.simple_move::<true, false>(mv, zobristhashes);
-        self.promotion_move::<true, false>(mv, zobristhashes);
-        self.pawn_special::<true, false>(mv, zobristhashes);
-        self.castling_move::<true, false>(mv, zobristhashes);
+    fn fake_move(&mut self, mv: BitMove) {
+        self.simple_move::<true, false, NoHashes>(mv, NoHashes::static_table());
+        self.promotion_move::<true, false, NoHashes>(mv, NoHashes::static_table());
+        self.pawn_special::<true, false, NoHashes>(mv, NoHashes::static_table());
+        self.castling_move::<true, false, NoHashes>(mv, NoHashes::static_table());
     }
+}
 
+trait BitBoardMoveComponents: BitBoard {
+    fn simple_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+
+    fn promotion_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+
+    fn castling_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+
+    fn capture<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        mv: BitMove,
+        sq: Square,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+
+    fn rook_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        piece: ChessMan,
+        color: Color,
+        sq: Square,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+
+    fn pawn_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64;
+}
+
+impl<BB: BitBoard> BitBoardMoveComponents for BB {
     #[inline]
-    fn simple_move<const MUT: bool, const HASH: bool>(
+    fn simple_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         mv: BitMove,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
-        let player = self.0.ply().0;
+        let player = self.ply().0;
 
         if MUT {
-            self.0.trans_mut().halfmove_clock += 1;
+            self.trans_mut().halfmove_clock += 1;
         }
 
         if mv.special.is_some() {
@@ -84,12 +129,12 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         let bits = (1 << mv.from as u8) | (1 << mv.to as u8);
 
         if MUT {
-            self.0.xor(player, mv.man, bits);
+            self.xor(player, mv.man, bits);
         }
 
         let rook_hash =
-            self.rook_special::<{ MUT }, { HASH }>(mv.man, player, mv.from, zobristhashes);
-        let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, mv.to, zobristhashes);
+            self.rook_special::<{ MUT }, { HASH }, ZT>(mv.man, player, mv.from, zobristhashes);
+        let cap_hash = self.capture::<{ MUT }, { HASH }, ZT>(mv, mv.to, zobristhashes);
 
         if HASH {
             hash ^= cap_hash;
@@ -98,20 +143,20 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         return hash;
     }
 
     #[inline]
-    fn promotion_move<const MUT: bool, const HASH: bool>(
+    fn promotion_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         mv: BitMove,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
-        let player = self.0.ply().0;
+        let player = self.ply().0;
 
         let Some(prom) = Promotion::from_special(mv.special) else {
             return hash;
@@ -119,11 +164,11 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         let prom = ChessMan::from(prom);
 
         if MUT {
-            self.0.xor(player, ChessMan::PAWN, 1 << mv.from.ix());
-            self.0.xor(player, prom, 1 << mv.to.ix());
+            self.xor(player, ChessMan::PAWN, 1 << mv.from.ix());
+            self.xor(player, prom, 1 << mv.to.ix());
         }
 
-        let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, mv.to, zobristhashes);
+        let cap_hash = self.capture::<{ MUT }, { HASH }, ZT>(mv, mv.to, zobristhashes);
 
         if HASH {
             hash ^= cap_hash;
@@ -132,20 +177,20 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         return hash;
     }
 
     #[inline]
-    fn castling_move<const MUT: bool, const HASH: bool>(
+    fn castling_move<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         mv: BitMove,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
-        let player = self.0.ply().0;
+        let player = self.ply().0;
 
         let Some(castle) = Castles::from_special(mv.special) else {
             return hash;
@@ -157,10 +202,10 @@ impl<BB: BitBoard> BitBoardMoves for BB {
             0x0000_0000_0000_00FF
         };
 
-        let king_move = self.0.castling().king_move[castle.ix()] & rank;
-        let rook_move = self.0.castling().rook_move[castle.ix()] & rank;
+        let king_move = self.castling().king_move[castle.ix()] & rank;
+        let rook_move = self.castling().rook_move[castle.ix()] & rank;
 
-        let mut rights = self.0.trans().rights;
+        let mut rights = self.trans().rights;
 
         if HASH {
             hash ^= zobristhashes.hash_rights(rights);
@@ -169,10 +214,10 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         rights[player.ix()] = [false; 2];
 
         if MUT {
-            self.0.trans().halfmove_clock += 1;
-            self.0.xor(player, ChessMan::KING, king_move);
-            self.0.xor(player, ChessMan::ROOK, rook_move);
-            self.0.trans().rights = rights;
+            self.trans().halfmove_clock += 1;
+            self.xor(player, ChessMan::KING, king_move);
+            self.xor(player, ChessMan::ROOK, rook_move);
+            self.trans().rights = rights;
         }
 
         if HASH {
@@ -181,27 +226,27 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         return hash;
     }
 
     #[inline]
-    fn pawn_special<const MUT: bool, const HASH: bool>(
+    fn pawn_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         mv: BitMove,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
-        let player = self.0.ply().0;
+        let player = self.ply().0;
 
-        let en_passant = self.0.trans().en_passant;
+        let en_passant = self.trans().en_passant;
 
         if MUT {
-            self.0.trans_mut().en_passant = None;
+            self.trans_mut().en_passant = None;
             if mv.man == ChessMan::PAWN {
-                self.0.trans_mut().halfmove_clock = 0;
+                self.trans_mut().halfmove_clock = 0;
             }
         }
 
@@ -216,8 +261,8 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         let bits = 1 << mv.from.ix() | 1 << mv.to.ix();
 
         if MUT {
-            self.0.trans_mut().halfmove_clock = 0;
-            self.0.xor(player, ChessMan::PAWN, bits);
+            self.trans_mut().halfmove_clock = 0;
+            self.xor(player, ChessMan::PAWN, bits);
         }
 
         if HASH {
@@ -225,7 +270,8 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if let Some(en_passant) = en_passant {
-            let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, en_passant.capture, zobristhashes);
+            let cap_hash =
+                self.capture::<{ MUT }, { HASH }, ZT>(mv, en_passant.capture, zobristhashes);
 
             if HASH {
                 hash ^= cap_hash;
@@ -239,7 +285,7 @@ impl<BB: BitBoard> BitBoardMoves for BB {
             });
 
             if MUT {
-                self.0.trans_mut().en_passant = Some(EnPassant {
+                self.trans_mut().en_passant = Some(EnPassant {
                     capture: mv.to,
                     square: Square::from_u8((mv.from as u8).min(mv.to as u8) + 8),
                 });
@@ -251,21 +297,21 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         return hash;
     }
 
     #[inline]
-    fn capture<const MUT: bool, const HASH: bool>(
+    fn capture<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         mv: BitMove,
         sq: Square,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
-        let opponent = self.0.ply().0.opp();
+        let opponent = self.ply().0.opp();
 
         let Some(man) = mv.capture else {
             return hash;
@@ -273,11 +319,12 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         let man = ChessMan::from(man);
 
         if MUT {
-            self.0.trans_mut().halfmove_clock = 0;
-            self.0.xor(opponent, man, 1 << sq.ix());
+            self.trans_mut().halfmove_clock = 0;
+            self.xor(opponent, man, 1 << sq.ix());
         }
 
-        let rook_hash = self.rook_special::<{ MUT }, { HASH }>(man, opponent, mv.to, zobristhashes);
+        let rook_hash =
+            self.rook_special::<{ MUT }, { HASH }, ZT>(man, opponent, mv.to, zobristhashes);
 
         if HASH {
             hash ^= rook_hash;
@@ -285,13 +332,13 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         hash
     }
 
-    fn rook_special<const MUT: bool, const HASH: bool>(
+    fn rook_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
         piece: ChessMan,
         color: Color,
@@ -305,8 +352,8 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         for dir in [Castles::EAST, Castles::WEST] {
-            if sq == self.0.castling().rook_from[dir.ix()] {
-                let mut rights = self.0.trans().rights;
+            if sq == self.castling().rook_from[dir.ix()] {
+                let mut rights = self.trans().rights;
 
                 if HASH {
                     hash ^= zobristhashes.hash_rights(rights);
@@ -315,7 +362,7 @@ impl<BB: BitBoard> BitBoardMoves for BB {
                 rights[color.ix()][dir.ix()] = false;
 
                 if MUT {
-                    self.0.trans_mut().rights = rights;
+                    self.trans_mut().rights = rights;
                 }
 
                 if HASH {
@@ -325,7 +372,7 @@ impl<BB: BitBoard> BitBoardMoves for BB {
         }
 
         if HASH && MUT {
-            self.0.hash(hash);
+            self.hash(hash);
         }
 
         return hash;
