@@ -1,283 +1,334 @@
-use std::ops::{FromResidual, Try};
+use std::{
+    marker::PhantomData,
+    ops::{FromResidual, Try},
+};
 
 use strum::VariantArray;
 
 use crate::model::{
-    BitBoard, BitMove, Castles, ChessMan, ChessPawn, Color, EnPassant, Legal, Promotion, Rights,
-    Special, Square, TransientInfo, ZOBRISTHASHES, ZobristHashes,
+    BitMove, Castles, ChessMan, ChessPawn, ChessPiece, Color, EnPassant, Legal, Promotion, Special,
+    Square, Transients,
+    bitboard::BitBoard,
+    hash::ZobristTables,
     notation::{AlgNotaion, CoordNotation},
 };
 
-impl BitBoard {
-    pub fn rehash(&self) -> u64 {
-        use ChessMan::*;
-        use Color::*;
+pub trait BitBoardMoves: BitBoard {
+    fn make_move<ZT: ZobristTables>(&mut self, mv: Legal) -> Transients;
+}
 
-        let mut res = 0;
+impl<BB: BitBoard> BitBoardMoves for BB {
+    fn make_move<ZT: ZobristTables>(&mut self, mv: Legal) -> Transients {
+        let zobristhashes = ZT::static_table();
 
-        let zobristhashes = &*ZOBRISTHASHES;
+        let res = self.0.trans();
 
-        for piece in [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] {
-            res ^= zobristhashes.hash_piece_mask(piece, self.pieces[piece as usize - 1]);
-        }
+        self.simple_move::<true, true>(mv.0, zobristhashes);
+        self.promotion_move::<true, true>(mv.0, zobristhashes);
+        self.pawn_special::<true, true>(mv.0, zobristhashes);
+        self.castling_move::<true, true>(mv.0, zobristhashes);
 
-        for color in [WHITE, BLACK] {
-            res ^= zobristhashes.hash_color_mask(color, self.colors[color as usize]);
-        }
+        self.0.next_ply();
 
-        res ^= zobristhashes.hash_rights(self.trans.rights);
-
-        if let Some(ep) = self.trans.en_passant {
-            res ^= zobristhashes.hash_file(ep.square as u8);
-        }
-
-        if self.player == BLACK {
-            res ^= zobristhashes.black_to_move;
-        }
-
-        res
+        return res;
     }
 
-    pub fn make_move(&mut self, mv: Legal) -> TransientInfo {
-        let res = self.trans;
-        let zobristhashes = &*&ZOBRISTHASHES;
+    fn unmake_move<ZT: ZobristTables>(&mut self, mv: Legal, trans: Transients) {
+        let zobristhashes = ZT::static_table();
 
-        self.update_transient::<true>(mv.0, zobristhashes);
+        self.0.prev_ply();
 
-        self.simple_move::<true>(mv.0, zobristhashes);
-        self.promotion_move::<true>(mv.0, zobristhashes);
-        self.pawn_special_move::<true>(mv.0, zobristhashes);
-        self.castling_move::<true>(mv.0, zobristhashes);
+        self.simple_move::<true, true>(mv.0, zobristhashes);
+        self.promotion_move::<true, true>(mv.0, zobristhashes);
+        self.pawn_special::<true, true>(mv.0, zobristhashes);
+        self.castling_move::<true, true>(mv.0, zobristhashes);
 
-        res
+        *self.0.trans_mut() = trans;
     }
 
-    pub(crate) fn fake_move(&mut self, mv: BitMove) {
-        todo!()
+    fn hash_move<ZT: ZobristTables>(&mut self, mv: BitMove) -> u64 {
+        let zobristhashes = ZT::static_table();
+
+        self.simple_move::<false, true>(mv, zobristhashes)
+            ^ self.promotion_move::<false, true>(mv, zobristhashes)
+            ^ self.pawn_special::<false, true>(mv, zobristhashes)
+            ^ self.castling_move::<false, true>(mv, zobristhashes)
     }
 
-    pub fn unmake_move(&mut self, mv: Legal, trans: TransientInfo) {
-        todo!()
-    }
+    fn fake_move<ZT: ZobristTables>(&mut self, mv: BitMove) {
+        let zobristhashes = ZT::static_table();
 
-    pub fn null_move(&mut self) {
-        self.player = self.player.opp();
-        self.hash ^= ZOBRISTHASHES.black_to_move;
+        self.simple_move::<true, false>(mv, zobristhashes);
+        self.promotion_move::<true, false>(mv, zobristhashes);
+        self.pawn_special::<true, false>(mv, zobristhashes);
+        self.castling_move::<true, false>(mv, zobristhashes);
     }
 
     #[inline]
-    fn simple_move<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
+    fn simple_move<const MUT: bool, const HASH: bool>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
+        let player = self.0.ply().0;
+
+        if MUT {
+            self.0.trans_mut().halfmove_clock += 1;
+        }
+
         if mv.special.is_some() {
-            return;
+            return hash;
         }
 
         let bits = (1 << mv.from as u8) | (1 << mv.to as u8);
 
-        self.pieces[mv.piece.ix()] ^= bits;
-        self.colors[self.player.ix()] ^= bits;
-
-        if HASH {
-            self.hash ^= zobristhashes.hash_piece_mask(mv.piece, bits);
-            self.hash ^= zobristhashes.hash_color_mask(self.player, bits);
+        if MUT {
+            self.0.xor(player, mv.man, bits);
         }
 
-        self.capture::<{ HASH }>(mv, mv.to, zobristhashes);
+        let rook_hash =
+            self.rook_special::<{ MUT }, { HASH }>(mv.man, player, mv.from, zobristhashes);
+        let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, mv.to, zobristhashes);
+
+        if HASH {
+            hash ^= cap_hash;
+            hash ^= rook_hash;
+            hash ^= zobristhashes.hash_move(player, mv.man, bits);
+        }
+
+        if HASH && MUT {
+            self.0.hash(hash);
+        }
+
+        return hash;
     }
 
     #[inline]
-    fn promotion_move<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
+    fn promotion_move<const MUT: bool, const HASH: bool>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
+        let player = self.0.ply().0;
+
         let Some(prom) = Promotion::from_special(mv.special) else {
-            return;
+            return hash;
         };
+        let prom = ChessMan::from(prom);
 
-        debug_assert_eq!(mv.piece, ChessMan::PAWN);
-
-        self.pieces[ChessPawn::PAWN.ix()] ^= 1 << mv.from as u8;
-        self.pieces[prom.ix()] ^= 1 << mv.to as u8;
-
-        if HASH {
-            self.hash ^= zobristhashes.pieces[ChessPawn::PAWN.ix()][mv.from.ix()];
-            self.hash ^= zobristhashes.pieces[prom.ix()][mv.to.ix()];
+        if MUT {
+            self.0.xor(player, ChessMan::PAWN, 1 << mv.from.ix());
+            self.0.xor(player, prom, 1 << mv.to.ix());
         }
 
-        self.capture::<{ HASH }>(mv, mv.to, zobristhashes);
+        let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, mv.to, zobristhashes);
+
+        if HASH {
+            hash ^= cap_hash;
+            hash ^= zobristhashes.hash_square(player, ChessMan::PAWN, mv.from);
+            hash ^= zobristhashes.hash_square(player, prom, mv.to);
+        }
+
+        if HASH && MUT {
+            self.0.hash(hash);
+        }
+
+        return hash;
     }
 
     #[inline]
-    fn castling_move<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
+    fn castling_move<const MUT: bool, const HASH: bool>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
+        let player = self.0.ply().0;
+
         let Some(castle) = Castles::from_special(mv.special) else {
-            return;
+            return hash;
         };
 
-        debug_assert_eq!(mv.piece, ChessMan::KING);
-
-        let rank = if self.player.is_black() {
+        let rank = if player.is_black() {
             0xFF00_0000_0000_0000
         } else {
             0x0000_0000_0000_00FF
         };
-        let king_move = self.castling.king_move[castle.ix()] & rank;
-        let rook_move = self.castling.rook_move[castle.ix()] & rank;
 
-        self.pieces[ChessMan::KING as usize - 1] ^= king_move;
-        self.pieces[ChessMan::ROOK as usize - 1] ^= rook_move;
-        self.colors[self.player as usize] ^= king_move | rook_move;
+        let king_move = self.0.castling().king_move[castle.ix()] & rank;
+        let rook_move = self.0.castling().rook_move[castle.ix()] & rank;
+
+        let mut rights = self.0.trans().rights;
 
         if HASH {
-            self.hash ^= zobristhashes.hash_piece_mask(ChessMan::KING, king_move);
-            self.hash ^= zobristhashes.hash_piece_mask(ChessMan::ROOK, rook_move);
-            self.hash ^= zobristhashes.hash_color_mask(self.player, king_move | rook_move);
+            hash ^= zobristhashes.hash_rights(rights);
         }
+
+        rights[player.ix()] = [false; 2];
+
+        if MUT {
+            self.0.trans().halfmove_clock += 1;
+            self.0.xor(player, ChessMan::KING, king_move);
+            self.0.xor(player, ChessMan::ROOK, rook_move);
+            self.0.trans().rights = rights;
+        }
+
+        if HASH {
+            hash ^= zobristhashes.hash_rights(rights);
+            hash ^= zobristhashes.hash_castling(player, king_move, rook_move);
+        }
+
+        if HASH && MUT {
+            self.0.hash(hash);
+        }
+
+        return hash;
     }
 
     #[inline]
-    fn pawn_special_move<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
-        if mv.special != Some(Special::PAWN) {
-            self.trans.en_passant = None;
-            return;
+    fn pawn_special<const MUT: bool, const HASH: bool>(
+        &mut self,
+        mv: BitMove,
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
+        let player = self.0.ply().0;
+
+        let en_passant = self.0.trans().en_passant;
+
+        if MUT {
+            self.0.trans_mut().en_passant = None;
+            if mv.man == ChessMan::PAWN {
+                self.0.trans_mut().halfmove_clock = 0;
+            }
         }
-
-        debug_assert_eq!(mv.piece, ChessMan::PAWN);
-
-        if let Some(ep) = self.trans.en_passant {
-            self.capture::<{ HASH }>(mv, ep.capture, zobristhashes);
-            self.trans.en_passant = None;
-        }
-
-        if (mv.from as u8).abs_diff(mv.to as u8) != 16 {
-            self.trans.en_passant = None;
-            return;
-        }
-
-        let ix = (mv.from as u8).min(mv.to as u8) + 8;
-        self.trans.en_passant = Some(EnPassant {
-            capture: mv.to,
-            square: Square::from_u8(ix),
-        });
 
         if HASH {
-            self.hash ^= zobristhashes.hash_file(ix);
+            hash ^= zobristhashes.hash_en_passant(en_passant);
         }
+
+        let Some(_) = ChessPawn::from_special(mv.special) else {
+            return hash;
+        };
+
+        let bits = 1 << mv.from.ix() | 1 << mv.to.ix();
+
+        if MUT {
+            self.0.trans_mut().halfmove_clock = 0;
+            self.0.xor(player, ChessMan::PAWN, bits);
+        }
+
+        if HASH {
+            hash ^= zobristhashes.hash_move(player, ChessMan::PAWN, bits);
+        }
+
+        if let Some(en_passant) = en_passant {
+            let cap_hash = self.capture::<{ MUT }, { HASH }>(mv, en_passant.capture, zobristhashes);
+
+            if HASH {
+                hash ^= cap_hash;
+            }
+        }
+
+        if (mv.from as u8).abs_diff(mv.to as u8) == 16 {
+            let en_passant = Some(EnPassant {
+                capture: mv.to,
+                square: Square::from_u8((mv.from as u8).min(mv.to as u8) + 8),
+            });
+
+            if MUT {
+                self.0.trans_mut().en_passant = Some(EnPassant {
+                    capture: mv.to,
+                    square: Square::from_u8((mv.from as u8).min(mv.to as u8) + 8),
+                });
+            }
+
+            if HASH {
+                hash ^= zobristhashes.hash_en_passant(en_passant);
+            }
+        }
+
+        if HASH && MUT {
+            self.0.hash(hash);
+        }
+
+        return hash;
     }
 
     #[inline]
-    fn capture<const HASH: bool>(
+    fn capture<const MUT: bool, const HASH: bool>(
         &mut self,
         mv: BitMove,
         sq: Square,
-        zobristhashes: &ZobristHashes,
-    ) {
-        let Some(man) = mv.capture else {
-            return;
-        };
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
+        let opponent = self.0.ply().0.opp();
 
-        self.pieces[man.ix()] ^= 1 << sq.ix();
-        self.colors[self.player.opp().ix()] ^= 1 << sq.ix();
+        let Some(man) = mv.capture else {
+            return hash;
+        };
+        let man = ChessMan::from(man);
+
+        if MUT {
+            self.0.trans_mut().halfmove_clock = 0;
+            self.0.xor(opponent, man, 1 << sq.ix());
+        }
+
+        let rook_hash = self.rook_special::<{ MUT }, { HASH }>(man, opponent, mv.to, zobristhashes);
 
         if HASH {
-            self.hash ^= zobristhashes.pieces[man.ix()][sq.ix()];
-            self.hash ^= zobristhashes.colors[self.player.opp().ix()][sq.ix()];
+            hash ^= rook_hash;
+            hash ^= zobristhashes.hash_square(opponent, man, sq);
         }
+
+        if HASH && MUT {
+            self.0.hash(hash);
+        }
+
+        hash
     }
 
-    #[inline]
-    fn update_transient<const HASH: bool>(&mut self, mv: BitMove, zobristhashes: &ZobristHashes) {
-        let ix = self.player.ix() << 1;
+    fn rook_special<const MUT: bool, const HASH: bool>(
+        &mut self,
+        piece: ChessMan,
+        color: Color,
+        sq: Square,
+        zobristhashes: &'static ZT,
+    ) -> u64 {
+        let mut hash = 0;
 
-        if HASH {
-            self.hash ^= zobristhashes.hash_rights(self.trans.rights);
+        if piece != ChessMan::ROOK {
+            return hash;
         }
 
-        if mv.piece == ChessMan::KING {
-            let bits = 0x3 << ix;
-            self.trans.rights.0 &= !bits;
-        }
+        for dir in [Castles::EAST, Castles::WEST] {
+            if sq == self.0.castling().rook_from[dir.ix()] {
+                let mut rights = self.0.trans().rights;
 
-        for (piece, square, color) in [
-            (Some(mv.piece), mv.from, self.player),
-            (mv.capture.map(ChessMan::from), mv.to, self.player.opp()),
-        ] {
-            if piece == Some(ChessMan::ROOK) {
-                for dir in [Castles::EAST, Castles::WEST] {
-                    if square == self.castling.rook_from[dir.ix()] {
-                        let ix = color.ix() << 1 | dir.ix();
-                        self.trans.rights.0 &= !(1 << ix);
-                    }
+                if HASH {
+                    hash ^= zobristhashes.hash_rights(rights);
+                }
+
+                rights[color.ix()][dir.ix()] = false;
+
+                if MUT {
+                    self.0.trans_mut().rights = rights;
+                }
+
+                if HASH {
+                    hash ^= zobristhashes.hash_rights(rights);
                 }
             }
         }
 
-        if HASH {
-            self.hash ^= zobristhashes.hash_rights(self.trans.rights);
+        if HASH && MUT {
+            self.0.hash(hash);
         }
 
-        if mv.capture.is_some() || mv.piece == ChessMan::PAWN {
-            self.trans.halfmove_clock = 0;
-        } else {
-            self.trans.halfmove_clock += 1;
-        }
-
-        if HASH {
-            if let Some(ep_square) = self.trans.en_passant {
-                self.hash ^= zobristhashes.hash_file(ep_square.square as u8);
-            }
-        }
-    }
-}
-
-impl ZobristHashes {
-    #[inline]
-    pub fn hash_mask(&self, board: &[u64; 64], mut mask: u64) -> u64 {
-        let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
-            res ^= board[sq as usize & 0x3F];
-        }
-        res
-    }
-
-    #[inline]
-    pub fn hash_color_mask(&self, color: Color, mut mask: u64) -> u64 {
-        let board = &self.colors[color as usize];
-        let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
-            res ^= board[sq as usize & 0x3F];
-        }
-        res
-    }
-
-    #[inline]
-    pub fn hash_piece_mask(&self, piece: ChessMan, mut mask: u64) -> u64 {
-        let board = &self.pieces[piece as usize - 1];
-        let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
-            res ^= board[sq as usize & 0x3F];
-        }
-        res
-    }
-
-    #[inline]
-    pub fn hash_rights(&self, r: Rights) -> u64 {
-        let mut res = 0;
-        for ix in 0..=3 {
-            if r.0 & 1 << ix != 0 {
-                res ^= self.castling[ix];
-            }
-        }
-        res
-    }
-
-    #[inline]
-    pub fn hash_file(&self, ix: u8) -> u64 {
-        self.ep_file[ix as usize & 0x7]
+        return hash;
     }
 }
 
@@ -297,14 +348,14 @@ impl MoveMatcher for AlgNotaion {
     fn matches(self, mv: BitMove) -> bool {
         match self {
             Self::Pawn(p, _) => {
-                mv.piece == ChessMan::PAWN
+                mv.man == ChessMan::PAWN
                     && (p.from as u8 & 0x7) == (mv.from as u8 & 0x7)
                     && p.to == mv.to
                     && p.capture == mv.capture.is_some()
                     && p.promote == Promotion::from_special(mv.special)
             }
             Self::Piece(p, _) => {
-                mv.piece == ChessMan::from(p.piece)
+                mv.man == ChessMan::from(p.piece)
                     && mv.to == p.to
                     && p.capture == mv.capture.is_some()
                     && match p.disambiguate {

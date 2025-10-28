@@ -3,16 +3,18 @@ use std::fmt::{Display, write};
 use strum::EnumIs;
 
 use crate::model::{
-    Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color, EnPassant, Promotion, Rights,
-    Square, TransientInfo, VariantNames,
+    CLASSIC_CASTLING, Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color, EnPassant,
+    Promotion, Square, Transients, VariantNames,
 };
 
 impl Square {
-    fn file(self) -> char {
+    #[inline]
+    pub fn file(self) -> char {
         unsafe { char::from_u32_unchecked('a' as u32 + (self as u32 & 0x7)) }
     }
 
-    fn rank(self) -> u8 {
+    #[inline]
+    pub fn rank(self) -> u8 {
         (self as u8 & 0x38) >> 3
     }
 }
@@ -64,75 +66,50 @@ impl Display for Castles {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct Rights([[bool; 2]; 2], &'static Castling);
+
 impl Display for Rights {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, c) in [(0, 'K'), (1, 'Q'), (2, 'k'), (3, 'q')] {
-            if (self.0 & 1 << i) != 0 {
-                write!(f, "{}", c)?;
+        if self.0 == [[false; 2]; 2] {
+            return write!(f, "-");
+        }
+
+        let letters = if self.1.chess960 {
+            let files = self.1.rook_from.map(|s| s.file());
+            [files.map(|c| c.to_ascii_uppercase()), files]
+        } else {
+            [['Q', 'K'], ['q', 'k']]
+        };
+
+        for c in [Color::WHITE, Color::BLACK] {
+            for d in [Castles::WEST, Castles::EAST] {
+                write!(f, "{}", letters[c.ix()][d.ix()])?;
             }
         }
+
         Ok(())
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Rights960(pub Rights, pub Square, pub Square);
-
-impl Rights960 {
-    fn from(r: Rights, c: &Castling) -> Self {
-        Self(r, c.rook_from[0], c.rook_from[1])
-    }
-}
-
-impl Display for Rights960 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let chars = [
-            (1, self.2.file().to_ascii_uppercase()),
-            (0, self.1.file().to_ascii_uppercase()),
-            (3, self.1.file()),
-            (2, self.2.file()),
-        ];
-        for (i, c) in chars {
-            if (self.0.0 & 1 << i) != 0 {
-                write!(f, "{}", c)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl Display for TransientInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {}",
-            self.rights,
-            self.en_passant
-                .map(|e| Square::VARIANTS[e.square.ix()])
-                .unwrap_or("-"),
-            self.halfmove_clock,
-        )
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TransientInfo960 {
-    pub rights: Rights960,
+#[derive(Debug, Clone, Copy)]
+struct TransientInfo {
+    pub rights: Rights,
     pub en_passant: Option<EnPassant>,
     pub halfmove_clock: u8,
 }
 
-impl TransientInfo960 {
-    fn from(t: TransientInfo, c: &Castling) -> Self {
+impl TransientInfo {
+    fn from(t: Transients, c: &'static Castling) -> Self {
         Self {
-            rights: Rights960::from(t.rights, c),
+            rights: Rights(t.rights, c),
             en_passant: t.en_passant,
             halfmove_clock: t.halfmove_clock,
         }
     }
 }
 
-impl Display for TransientInfo960 {
+impl Display for TransientInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

@@ -5,7 +5,9 @@ use strum::{EnumIs, FromRepr, VariantArray, VariantNames};
 
 pub mod attacks;
 pub mod binary;
+pub mod bitboard;
 pub mod game;
+pub mod hash;
 pub mod mailbox;
 pub mod movegen;
 pub mod moving;
@@ -268,171 +270,57 @@ impl Castles {
     }
 }
 
-#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Rights(pub u8);
-impl Rights {
-    #[allow(unused)]
-    const START: Rights = Rights(0b1111);
-    #[allow(unused)]
-    const NIL: Rights = Rights(0b0000);
-}
+#[repr(transparent)]
+pub struct PseudoLegal(pub BitMove);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct PseudoLegal(BitMove);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct Legal(BitMove);
-
-trait MoveStatus {
-    fn new(b: BitMove) -> Self;
-}
-
-impl MoveStatus for PseudoLegal {
-    #[inline]
-    fn new(b: BitMove) -> Self {
-        Self(b)
-    }
-}
-
-impl MoveStatus for Legal {
-    #[inline]
-    fn new(b: BitMove) -> Self {
-        Self(b)
-    }
-}
+pub struct Legal(pub BitMove);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BitMove {
     pub from: Square,
     pub to: Square,
-    pub piece: ChessMan,
+    pub man: ChessMan,
     pub special: Option<Special>,
     pub capture: Option<ChessCommoner>,
 }
 
+impl BitMove {
+    #[cfg(test)]
+    pub fn sanity_check(self) {
+        if Castles::from_special(self.special).is_some() {
+            assert_eq!(self.man, ChessMan::KING);
+            assert_eq!(self.capture, None);
+            assert_eq!(self.from.rank(), self.to.rank());
+        }
+
+        if ChessPawn::from_special(self.special).is_some() {
+            assert_eq!(self.man, ChessMan::PAWN);
+            if self.capture.is_some() {
+                assert_eq!(self.capture, Some(ChessCommoner::PAWN));
+            } else {
+                assert_eq!(self.from.ix().abs_diff(self.to.ix()), 16);
+            }
+        }
+    }
+
+    #[cfg(not(test))]
+    pub fn sanity_check(self) {}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TransientInfo {
+pub struct Transients {
     pub en_passant: Option<EnPassant>,
     pub halfmove_clock: u8,
-    pub rights: Rights,
+    pub rights: [[bool; 2]; 2],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnPassant {
     square: Square,
     capture: Square,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct BitBoard {
-    pub pieces: [u64; 6],
-    pub colors: [u64; 2],
-    pub castling: &'static Castling,
-    pub hash: u64,
-    pub turn: u16,
-    pub player: Color,
-    pub trans: TransientInfo,
-}
-
-impl PartialEq for BitBoard {
-    fn eq(&self, other: &Self) -> bool {
-        self.pieces == other.pieces
-            && self.colors == other.colors
-            && self.hash == other.hash
-            && self.player == other.player
-            && self.trans.rights == other.trans.rights
-            && self.trans.en_passant == other.trans.en_passant
-    }
-}
-
-impl BitBoard {
-    pub fn startpos() -> Self {
-        let mut res = Self {
-            pieces: [
-                0x00FF_0000_0000_FF00,
-                0x4200_0000_0000_0042,
-                0x2400_0000_0000_0024,
-                0x8100_0000_0000_0081,
-                0x0800_0000_0000_0008,
-                0x1000_0000_0000_0010,
-            ],
-            colors: [0x0000_0000_0000_FFFF, 0xFFFF_0000_0000_0000],
-            castling: &CLASSIC_CASTLING,
-            hash: 0,
-            turn: 1,
-            player: Color::WHITE,
-            trans: TransientInfo {
-                en_passant: None,
-                halfmove_clock: 0,
-                rights: Rights::START,
-            },
-        };
-        res.hash = res.rehash();
-        res
-    }
-
-    #[cfg(test)]
-    pub fn sanity_check(&self) {
-        for p1 in ChessMan::VARIANTS {
-            for p2 in ChessMan::VARIANTS {
-                let (p1, p2) = (*p1, *p2);
-                if p1 >= p2 {
-                    continue;
-                }
-
-                assert_eq!(
-                    self.pieces[p1 as usize - 1] & self.pieces[p2 as usize - 1],
-                    0,
-                    "{:?} and {:?} overlap",
-                    p1,
-                    p2
-                );
-            }
-        }
-
-        assert_eq!(
-            self.colors[Color::WHITE as usize] | self.colors[Color::BLACK as usize],
-            0,
-            "white and black overlap",
-        );
-
-        let mut white = 0;
-        let mut black = 0;
-        let mut total = 0;
-
-        for p in &self.pieces {
-            let p = *p;
-            white |= self.colors[Color::WHITE as usize] & p;
-            black |= self.colors[Color::BLACK as usize] & p;
-            total |= p;
-        }
-
-        assert_eq!(
-            white,
-            self.colors[Color::WHITE as usize],
-            "sum of white-masked pieces not equal to white"
-        );
-
-        assert_eq!(
-            black,
-            self.colors[Color::BLACK as usize],
-            "disjunction of black-masked pieces not equal to black"
-        );
-
-        assert_eq!(
-            total,
-            white | black,
-            "disjunction of pieces not equal to disjunction of colors"
-        );
-
-        assert_eq!(self.hash, self.rehash(), "procedural hash mismatch");
-    }
-
-    #[cfg(not(test))]
-    pub fn sanity_check(&self) {}
 }
 
 #[derive(Debug)]
@@ -453,50 +341,3 @@ pub const CLASSIC_CASTLING: Castling = Castling {
     rook_from: [Square::h1, Square::a1],
     chess960: false,
 };
-
-#[derive(Debug, Clone)]
-pub struct ZobristHashes {
-    pub pieces: [[u64; 64]; 6],
-    pub colors: [[u64; 64]; 2],
-    pub ep_file: [u64; 8],
-    pub castling: [u64; 4],
-    pub black_to_move: u64,
-}
-
-impl ZobristHashes {
-    pub fn rng() -> SmallRng {
-        SmallRng::from_seed(*b"3.141592653589793238462643383279")
-    }
-
-    pub fn new() -> Self {
-        let mut pi = Self::rng();
-
-        let mut pieces = [[0; 64]; 6];
-        for piece in &mut pieces {
-            pi.fill(&mut piece[..]);
-        }
-
-        let mut colors = [[0; 64]; 2];
-        for color in &mut colors {
-            pi.fill(&mut color[..]);
-        }
-
-        let mut eps = [0; 8];
-        pi.fill(&mut eps[..]);
-
-        let mut castling = [0; 4];
-        pi.fill(&mut castling[..]);
-
-        let black_to_move = pi.next_u64();
-
-        ZobristHashes {
-            pieces,
-            colors,
-            ep_file: eps,
-            castling,
-            black_to_move,
-        }
-    }
-}
-
-pub static ZOBRISTHASHES: LazyLock<ZobristHashes> = LazyLock::new(ZobristHashes::new);

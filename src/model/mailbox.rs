@@ -2,7 +2,7 @@ use crate::model::{ChessMan, Color};
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]
-pub struct Mailbox<T>([T; 64]);
+pub struct Mailbox<T>(pub [T; 64]);
 
 impl<T: Clone + Copy> Mailbox<T> {
     pub fn mask(&self, mut p: impl FnMut(&T) -> bool) -> u64 {
@@ -13,6 +13,14 @@ impl<T: Clone + Copy> Mailbox<T> {
             }
         }
         res
+    }
+
+    pub fn set(&mut self, ix: u64, mut v: impl FnMut() -> T) {
+        for i in 0..=63 {
+            if (ix & 1 << i) != 0 {
+                self.0[i] = v();
+            }
+        }
     }
 }
 
@@ -31,4 +39,18 @@ pub enum ChessSet {
     WROOK = 4,
     WQUEEN = 5,
     WKING = 6,
+}
+
+impl ChessSet {
+    fn man(self) -> ChessMan {
+        unsafe { std::mem::transmute((self as i8).abs()) }
+    }
+
+    fn color(self) -> Color {
+        if (self as i8) < 0 {
+            Color::BLACK
+        } else {
+            Color::WHITE
+        }
+    }
 }

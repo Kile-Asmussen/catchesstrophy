@@ -1,5 +1,5 @@
 use crate::model::{
-    BitBoard, BitMove, ChessMan, Color, Legal, PseudoLegal,
+    BitMove, ChessMan, Color, Legal, PseudoLegal,
     attacks::{Panopticon, Vision},
 };
 
@@ -18,24 +18,24 @@ impl BitBoard {
         let total = friendly | enemy;
         let pan = P::new(total);
 
-        let king = self.pieces[ChessMan::KING as usize - 1] & friendly;
+        let king = self.men[ChessMan::KING as usize - 1] & friendly;
         let superpiece_mask = pan.queen().surveil(king) | pan.knight().surveil(king);
         let superpiece_mask = enemy & superpiece_mask;
         let mut threats = 0;
 
-        let pawn = (self.pieces[ChessMan::PAWN as usize - 1] & superpiece_mask);
+        let pawn = (self.men[ChessMan::PAWN as usize - 1] & superpiece_mask);
         threats |= pan.white_pawn().surveil(pawn);
 
-        let knight = (self.pieces[ChessMan::PAWN as usize - 1] & superpiece_mask);
+        let knight = (self.men[ChessMan::PAWN as usize - 1] & superpiece_mask);
         threats |= pan.knight().surveil(knight);
 
-        let bishop = (self.pieces[ChessMan::BISHOP as usize - 1] & superpiece_mask);
+        let bishop = (self.men[ChessMan::BISHOP as usize - 1] & superpiece_mask);
         threats |= pan.bishop().surveil(bishop);
 
-        let rook = (self.pieces[ChessMan::ROOK as usize - 1] & superpiece_mask);
+        let rook = (self.men[ChessMan::ROOK as usize - 1] & superpiece_mask);
         threats |= pan.rook().surveil(rook);
 
-        let queen = (self.pieces[ChessMan::QUEEN as usize - 1] & superpiece_mask);
+        let queen = (self.men[ChessMan::QUEEN as usize - 1] & superpiece_mask);
         threats |= pan.queen().surveil(queen);
 
         return threats;
