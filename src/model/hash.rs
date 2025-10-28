@@ -133,8 +133,7 @@ impl CompactZobristTables {
         let mut res = 0;
         for _ in 0..mask.count_ones() {
             let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
+            mask ^= 1 << sq;
             res ^= self.colors[color.ix()][sq as usize & 0x3F];
         }
         res
@@ -145,8 +144,7 @@ impl CompactZobristTables {
         let mut res = 0;
         for _ in 0..mask.count_ones() {
             let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
+            mask ^= 1 << sq;
             res ^= self.men[man.ix()][sq as usize & 0x3F];
         }
         res
@@ -244,8 +242,7 @@ impl FullZobristTables {
         let board = self.masks[color.ix()][man.ix()];
         for _ in 0..mask.count_ones() {
             let sq = mask.trailing_zeros();
-            let bit = 1 << sq;
-            mask ^= bit;
+            mask ^= 1 << sq;
             res ^= board[sq as usize & 0x3F];
         }
         res
