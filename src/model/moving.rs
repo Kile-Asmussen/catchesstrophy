@@ -6,7 +6,7 @@ use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, ChessPromotion,
     EnPassant, Legal, PseudoLegal, SpecialMove, Square, Transients,
     bitboard::{BitBoard, ChessBoard, MetaBoard},
-    castling::{CLASSIC_CASTLING, Castling},
+    castling::Castling,
     hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},
 };
@@ -49,7 +49,7 @@ pub fn fake_move<BB: BitBoard>(board: &mut BB, mv: PseudoLegal) {
     make_legal_move::<MoveOnly<BB>, NoHashes>(&mut MoveOnly(board), Legal(mv.0));
 }
 
-pub fn hash_move<BB: BitBoard, ZT: ZobristTables>(board: &mut BB, mv: PseudoLegal) {
+pub fn hash_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: PseudoLegal) {
     make_legal_move::<HashOnly, ZT>(
         &mut HashOnly(0, board.trans(), board.ply().0, board.castling()),
         Legal(mv.0),
