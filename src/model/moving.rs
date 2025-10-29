@@ -6,11 +6,21 @@ use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, ChessPromotion,
     EnPassant, Legal, PseudoLegal, SpecialMove, Square, Transients,
     bitboard::{BitBoard, ChessBoard, MetaBoard},
-    castling::Castling,
+    castling::{CLASSIC_CASTLING, Castling},
     hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},
 };
 
+/// Make a legal move on a bitboard given a Zobrist hashing table
+///
+/// This accounts for four cases:
+/// - the move is a simple move with/without capture
+/// - the move is a promotion move with/without capture
+/// - the move is a special pawn move interacting with the _en passant_ rule
+/// - the move is a castling move
+///
+/// If `mv` is not a legal move that was just generated in accordance with `board`,
+/// the behavior is unspecified.
 pub fn make_legal_move<BB: BitBoard, ZT: ZobristTables>(board: &mut BB, mv: Legal) -> Transients {
     let zobristhashes = ZT::static_table();
 
@@ -26,6 +36,10 @@ pub fn make_legal_move<BB: BitBoard, ZT: ZobristTables>(board: &mut BB, mv: Lega
     return res;
 }
 
+/// Unmake a legal move just made.
+///
+/// If `mv` is not a move just made on `board` using [`make_legal_move`] and `trans` is not
+/// the result of calling [`make_legal_move`], then the behavior is unspecified.
 pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: Legal,
@@ -45,15 +59,33 @@ pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
     board.set_en_passant(trans.en_passant);
 }
 
-pub fn fake_move<BB: BitBoard>(board: &mut BB, mv: PseudoLegal) {
-    make_legal_move::<MoveOnly<BB>, NoHashes>(&mut MoveOnly(board), Legal(mv.0));
+/// Clone the board and make the legal move on the clone.
+pub fn clone_make_legal_move<BB: BitBoard + Clone, ZT: ZobristTables>(board: &BB, mv: Legal) -> BB {
+    let mut res = board.clone();
+    make_legal_move::<BB, ZT>(&mut res, mv);
+    res
 }
 
-pub fn hash_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: PseudoLegal) {
-    make_legal_move::<HashOnly, ZT>(
-        &mut HashOnly(0, board.trans(), board.ply().0, board.castling()),
-        Legal(mv.0),
+/// Clone the board and make the pseudo-legal move on the clone, without
+/// accounting for anything except the board position.
+///
+/// This can be used for analyzing whether a move puts the king in check.
+pub fn clone_make_pseudolegal_move<BB: BitBoard + Clone>(board: &BB, mv: PseudoLegal) -> BB {
+    let mut res = board.clone();
+    make_legal_move::<MoveOnly<BB>, NoHashes>(&mut MoveOnly(&mut res), Legal(mv.0));
+    res
+}
+
+/// Compute the zobrist hash that would result from applying this move.
+pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: BitMove) -> u64 {
+    let mut res = HashOnly(
+        board.curr_hash(),
+        board.trans(),
+        board.ply().0,
+        board.castling(),
     );
+    make_legal_move::<HashOnly, ZT>(&mut res, Legal(mv));
+    res.0
 }
 
 fn simple_move<BB: BitBoard, ZT: ZobristTables>(
@@ -230,6 +262,7 @@ fn castling_move<BB: BitBoard, ZT: ZobristTables>(
     board.hash(zobristhashes.hash_castling(player, king_move, rook_move));
 }
 
+#[repr(transparent)]
 struct MoveOnly<'a, BB: BitBoard>(&'a mut BB);
 
 impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
