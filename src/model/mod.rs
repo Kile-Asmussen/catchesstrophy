@@ -6,7 +6,7 @@
 
 use strum::{EnumIs, FromRepr, VariantArray, VariantNames};
 
-pub mod attacks;
+pub mod attacking;
 pub mod binary;
 pub mod bitboard;
 pub mod castling;
@@ -17,6 +17,7 @@ pub mod movegen;
 pub mod moving;
 pub mod notation;
 pub mod utils;
+pub mod vision;
 
 /// Representation of the squares on a chessboard.
 ///
@@ -42,7 +43,7 @@ pub mod utils;
 #[rustfmt::skip]
 pub enum Square {
     a1 = 0o00, b1 = 0o01, c1 = 0o02, d1 = 0o03, e1 = 0o04, f1 = 0o05, g1 = 0o06, h1 = 0o07,
-    a2 = 0100, b2 = 0o11, c2 = 0o12, d2 = 0o13, e2 = 0o14, f2 = 0o15, g2 = 0o16, h2 = 0o17,
+    a2 = 0o10, b2 = 0o11, c2 = 0o12, d2 = 0o13, e2 = 0o14, f2 = 0o15, g2 = 0o16, h2 = 0o17,
     a3 = 0o20, b3 = 0o21, c3 = 0o22, d3 = 0o23, e3 = 0o24, f3 = 0o25, g3 = 0o26, h3 = 0o27,
     a4 = 0o30, b4 = 0o31, c4 = 0o32, d4 = 0o33, e4 = 0o34, f4 = 0o35, g4 = 0o36, h4 = 0o37,
     a5 = 0o40, b5 = 0o41, c5 = 0o42, d5 = 0o43, e5 = 0o44, f5 = 0o45, g5 = 0o46, h5 = 0o47,
@@ -62,7 +63,25 @@ impl Square {
     /// extraneous bits.
     #[inline]
     pub fn from_u8(ix: u8) -> Self {
-        unsafe { std::mem::transmute(ix & 0x3F) }
+        unsafe { std::mem::transmute::<u8, Square>(ix & 0x3Fu8) }
+    }
+
+    /// Mirror chessboard north to sout
+    #[inline]
+    pub fn mirror_ns(self) -> Self {
+        unsafe { std::mem::transmute::<u8, Square>(self as u8 ^ 0x38u8) }
+    }
+
+    /// Mirror chessboard east to west
+    #[inline]
+    pub fn mirror_ew(self) -> Self {
+        unsafe { std::mem::transmute::<u8, Square>(self as u8 ^ 0x7u8) }
+    }
+
+    /// Rotate chessboard 180 degrees
+    #[inline]
+    pub fn rotate(self) -> Self {
+        unsafe { std::mem::transmute::<u8, Square>(63u8 - self as u8) }
     }
 }
 
@@ -508,7 +527,7 @@ pub struct PseudoLegal(pub BitMove);
 /// Provided as syntactic salt for the API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct Legal(pub BitMove);
+pub struct LegalMove(pub BitMove);
 
 /// Representation of a move on a chessboard.
 ///
@@ -599,6 +618,14 @@ impl Transients {
             en_passant: None,
             halfmove_clock: 0,
             rights: [[true; 2]; 2],
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            en_passant: None,
+            halfmove_clock: 0,
+            rights: [[false; 2]; 2],
         }
     }
 }

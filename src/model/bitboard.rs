@@ -21,6 +21,8 @@
 //! profiling. Their interfaces are identical and they can be substituted
 //! for one another without loss of correctness.
 
+use std::borrow::Cow;
+
 use crate::model::{
     ChessColor, ChessCommoner, ChessEchelon, ChessMan, EnPassant, Square, Transients,
     castling::{CLASSIC_CASTLING, Castling},
@@ -52,6 +54,9 @@ pub trait BitBoard: ChessBoard {
     /// Retrieve the bitboard represeting the squares occuipied by all the chessmen of one color.
     fn color(&self, color: ChessColor) -> u64;
 
+    /// Retreive the entire array chessmen masks for one color
+    fn side(&self, color: ChessColor) -> Cow<'_, [u64; 6]>;
+
     /// Retrieve the bitboard representing all occupied squares.
     fn total(&self) -> u64;
 }
@@ -72,6 +77,9 @@ pub trait ChessBoard: MetaBoard {
     /// The unicode characters for chessmen do not account for dark mode.)
     fn startpos<ZT: ZobristTables>() -> Self;
 
+    /// The completely blank slate
+    fn empty() -> Self;
+
     /// Optional sanity checking.
     ///
     /// Bitboards, unlike mailboxes, do not have
@@ -91,7 +99,7 @@ pub trait ChessBoard: MetaBoard {
 /// - Active player color and turn number
 /// - Zobrist hash of the current position (see [`hash`](crate::model::hash))
 /// - The transient game state information
-pub trait MetaBoard {
+pub trait MetaBoard: Clone {
     /// The current state of the transient information.
     ///
     /// Yes, [`Transients`] includes a field named `rights` 🏳️‍⚧️
@@ -184,14 +192,14 @@ impl MetaBoard for DefaultMetaBoard {
     #[inline]
     fn next_ply(&mut self) {
         self.player = self.player.opp();
-        if self.player == ChessColor::WHITE {
+        if self.player.is_white() {
             self.turn += 1;
         }
     }
 
     #[inline]
     fn prev_ply(&mut self) {
-        if self.player == ChessColor::WHITE {
+        if self.player.is_white() {
             self.turn -= 1;
         }
         self.player = self.player.opp();
@@ -234,11 +242,7 @@ impl ChessBoard for DefaultMetaBoard {
             hash: 0,
             player: ChessColor::WHITE,
             turn: 1,
-            trans: Transients {
-                en_passant: None,
-                halfmove_clock: 0,
-                rights: [[true; 2]; 2],
-            },
+            trans: Transients::startpos(),
         };
         res.hash = res.rehash::<ZT>();
         res
@@ -257,6 +261,17 @@ impl ChessBoard for DefaultMetaBoard {
         zobristtable.black()
             ^ zobristtable.hash_rights(self.trans.rights)
             ^ zobristtable.hash_en_passant(self.trans.en_passant)
+    }
+
+    /// Empty chessboard
+    fn empty() -> Self {
+        Self {
+            castling: &CLASSIC_CASTLING,
+            hash: 0,
+            turn: 1,
+            player: ChessColor::WHITE,
+            trans: Transients::empty(),
+        }
     }
 }
 
@@ -378,6 +393,12 @@ impl BitBoard for CompactBitBoard {
         }
         None
     }
+
+    /// Inefficient, as we need to allocate an entire array
+    fn side(&self, color: ChessColor) -> Cow<'_, [u64; 6]> {
+        let color = self.colors[color.ix()];
+        Cow::Owned(self.ech.map(|x| x & color))
+    }
 }
 
 impl HasDefaultMetaBoard for CompactBitBoard {
@@ -479,6 +500,14 @@ impl ChessBoard for CompactBitBoard {
             "procedural hash mismatch"
         );
     }
+
+    fn empty() -> Self {
+        Self {
+            ech: [0; 6],
+            colors: [0; 2],
+            meta: DefaultMetaBoard::empty(),
+        }
+    }
 }
 
 /// The naive bitboard representation.
@@ -541,6 +570,11 @@ impl BitBoard for FullBitBoard {
         }
         None
     }
+
+    /// Efficient since we already have the data handy
+    fn side(&self, color: ChessColor) -> Cow<'_, [u64; 6]> {
+        Cow::Borrowed(&self.masks[color.ix()])
+    }
 }
 
 impl HasDefaultMetaBoard for FullBitBoard {
@@ -601,6 +635,13 @@ impl ChessBoard for FullBitBoard {
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
         self.metaboard().rehash::<ZT>() ^ ZT::static_table().hash_full_bitboard(&self.masks)
     }
+
+    fn empty() -> Self {
+        Self {
+            masks: [[0; 6]; 2],
+            meta: DefaultMetaBoard::empty(),
+        }
+    }
 }
 
 /// A slight optimization of the [`FullBitBoard`].
@@ -655,6 +696,11 @@ impl BitBoard for FullerBitBoard {
     fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
         self.bitboard.comm_at(sq)
     }
+
+    /// Delegated
+    fn side(&self, color: ChessColor) -> Cow<'_, [u64; 6]> {
+        self.bitboard.side(color)
+    }
 }
 
 impl HasDefaultMetaBoard for FullerBitBoard {
@@ -694,5 +740,12 @@ impl ChessBoard for FullerBitBoard {
     #[inline]
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
         self.bitboard.rehash::<ZT>()
+    }
+
+    fn empty() -> Self {
+        Self {
+            bitboard: FullBitBoard::empty(),
+            total: [0; 2],
+        }
     }
 }

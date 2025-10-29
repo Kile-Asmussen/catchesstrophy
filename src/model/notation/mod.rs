@@ -113,7 +113,7 @@ impl Display for Rights {
         }
 
         let letters = if self.1.chess960 {
-            let files = self.1.rook_from.map(|s| s.file());
+            let files = self.1.rook_start[ChessColor::WHITE.ix()].map(|s| s.file());
             [files.map(|c| c.to_ascii_uppercase()), files]
         } else {
             [['Q', 'K'], ['q', 'k']]

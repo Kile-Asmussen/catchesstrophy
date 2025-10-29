@@ -36,9 +36,9 @@ impl<T, S: Deref<Target = [T]>> SliceExtensions<T> for S {}
 macro_rules! biterate {
     {for $sq:ident in $mask:expr; $body:tt } => {{
         let mut mask: u64 = $mask;
-        for _ in 0..=mask.count_ones() {
+        for _ in 0..mask.count_ones() {
             let ix = mask.trailing_zeros();
-            mask = !(1 << ix);
+            mask &= !(1 << ix);
             let $sq = crate::model::Square::from_u8(ix as u8);
             $body
         }
@@ -46,3 +46,13 @@ macro_rules! biterate {
 }
 
 pub use biterate;
+
+#[test]
+fn biterate_test() {
+    let mut v = vec![];
+    biterate! {for sq in u64::MAX; {
+        v.push(sq);
+    }}
+
+    println!("{:?}", v);
+}

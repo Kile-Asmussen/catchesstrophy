@@ -5,8 +5,8 @@ use std::simd::{num::SimdUint, u64x2, u64x4};
 
 use crate::model::{
     Square,
-    attacks::{PawnVision, PawnsBitBlit, Vision},
     notation::show_mask,
+    vision::{PawnVision, PawnsBitBlit, Vision},
 };
 
 #[test]

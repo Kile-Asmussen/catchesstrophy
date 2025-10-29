@@ -1,23 +1,30 @@
+use std::marker::PhantomData;
+
 use crate::model::{
-    BitMove, ChessColor, ChessCommoner, ChessEchelon, EnPassant, Legal, PseudoLegal, SpecialMove,
-    Square,
-    attacks::{Panopticon, PawnVision, Vision},
+    BitMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
+    LegalMove, PseudoLegal, SpecialMove, Square,
+    attacking::{AttackMaskStrategy, Attacks},
     bitboard::BitBoard,
+    castling,
+    notation::show_mask,
     utils::biterate,
+    vision::{Panopticon, PawnVision, PieceVision, Vision},
 };
 
-pub trait Blesser {
+pub trait Blesser<'a> {
     type Blessed;
-    fn new(total: u64) -> Self;
-
-    fn bless<BB: BitBoard>(&self, board: &BB, mv: BitMove) -> Option<Self::Blessed> {
-        let mut res = Vec::with_capacity(1);
-        self.bless_into(board, mv, &mut res);
-        res.pop()
-    }
+    fn new<BB: BitBoard>(board: &'a BB) -> Self;
 
     #[inline]
-    fn bless_into<BB: BitBoard>(&self, board: &BB, mv: BitMove, buffer: &mut Vec<Self::Blessed>) {
+    fn bless<BB: BitBoard>(&self, board: &'a BB, mv: BitMove) -> Option<Self::Blessed>;
+
+    #[inline]
+    fn bless_into<BB: BitBoard>(
+        &self,
+        board: &'a BB,
+        mv: BitMove,
+        buffer: &mut Vec<Self::Blessed>,
+    ) {
         if let Some(b) = self.bless(board, mv) {
             buffer.push(b)
         }
@@ -26,10 +33,10 @@ pub trait Blesser {
 
 pub struct NoBlessing;
 
-impl Blesser for NoBlessing {
+impl<'a> Blesser<'a> for NoBlessing {
     type Blessed = PseudoLegal;
 
-    fn new(total: u64) -> Self {
+    fn new<BB: BitBoard>(_: &BB) -> Self {
         NoBlessing
     }
 
@@ -39,49 +46,126 @@ impl Blesser for NoBlessing {
     }
 }
 
-pub struct LegalOnly<X: Panopticon>(X);
+pub struct LegalBlessing<'a, AS: AttackMaskStrategy<'a>, X: Panopticon> {
+    attack_strat: AS,
+    cached_attack: u64,
+    _lt: PhantomData<&'a X>,
+}
 
-impl<X: Panopticon> Blesser for LegalOnly<X> {
-    type Blessed = Legal;
+impl<'a, A: AttackMaskStrategy<'a>, X: Panopticon> Blesser<'a> for LegalBlessing<'a, A, X> {
+    type Blessed = LegalMove;
 
-    fn new(total: u64) -> Self {
-        LegalOnly(X::new(total))
+    fn new<BB: BitBoard>(board: &'a BB) -> Self {
+        let attack_strat = A::new(board);
+        let cached_attack = attack_strat.attacks::<BB, X>(board, board.ply().0).attack;
+        Self {
+            attack_strat,
+            cached_attack,
+            _lt: PhantomData,
+        }
     }
 
-    fn bless<BB: BitBoard>(&self, board: &BB, mv: BitMove) -> Option<Self::Blessed> {
-        todo!()
+    fn bless<BB: BitBoard>(&self, board: &'a BB, mv: BitMove) -> Option<Self::Blessed> {
+        let player = board.ply().0;
+        if self
+            .attack_strat
+            .attacks_after::<BB, X>(board, player, mv)
+            .check()
+        {
+            return None;
+        } else if let Some(ix) = CastlingDirection::from_special(mv.special) {
+            let castling = board.castling();
+            let atks = Attacks {
+                attack: self.cached_attack,
+                targeted_king: castling.safety[ix.ix()] & castling.back_rank[player.ix()],
+            };
+
+            if atks.check() {
+                return None;
+            }
+        }
+
+        return Some(LegalMove(mv));
     }
 }
 
-pub fn enumerate<BB: BitBoard, X: Panopticon, L: Blesser>(
-    board: &BB,
+pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: Blesser<'a>>(
+    board: &'a BB,
     buffer: &mut Vec<L::Blessed>,
 ) {
     let total = board.total();
     let pan = X::new(total);
-    let bless = L::new(total);
+    let blesser = L::new(board);
     let player = board.ply().0;
+    let friendly = board.color(player);
 
     match board.ply().0 {
         ChessColor::WHITE => pawn_moves(
             board,
-            &bless,
+            &blesser,
             board.men(player, ChessEchelon::PAWN),
             pan.white_pawn(),
             buffer,
         ),
         ChessColor::BLACK => pawn_moves(
             board,
-            &bless,
+            &blesser,
             board.men(player, ChessEchelon::PAWN),
             pan.black_pawn(),
             buffer,
         ),
     }
+
+    piece_moves(
+        board,
+        &blesser,
+        board.men(player, ChessEchelon::KNIGHT),
+        friendly,
+        pan.knight(),
+        buffer,
+    );
+
+    piece_moves(
+        board,
+        &blesser,
+        board.men(player, ChessEchelon::BISHOP),
+        friendly,
+        pan.bishop(),
+        buffer,
+    );
+
+    piece_moves(
+        board,
+        &blesser,
+        board.men(player, ChessEchelon::ROOK),
+        friendly,
+        pan.rook(),
+        buffer,
+    );
+
+    piece_moves(
+        board,
+        &blesser,
+        board.men(player, ChessEchelon::QUEEN),
+        friendly,
+        pan.queen(),
+        buffer,
+    );
+
+    piece_moves(
+        board,
+        &blesser,
+        board.men(player, ChessEchelon::KING),
+        friendly,
+        pan.king(),
+        buffer,
+    );
+
+    castling_move(board, &blesser, total, buffer);
 }
 
-pub fn pawn_moves<P: PawnVision, BB: BitBoard, L: Blesser>(
-    board: &BB,
+pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: Blesser<'a>>(
+    board: &'a BB,
     blesser: &L,
     pawns: u64,
     pawn_vision: P,
@@ -125,14 +209,14 @@ pub fn pawn_moves<P: PawnVision, BB: BitBoard, L: Blesser>(
     }}
 }
 
-fn promotions<BB: BitBoard, L: Blesser>(
-    board: &BB,
+fn promotions<'a, BB: BitBoard, L: Blesser<'a>>(
+    board: &'a BB,
     blesser: &L,
     mut mv: BitMove,
     buffer: &mut Vec<L::Blessed>,
 ) {
     use SpecialMove::*;
-    if mv.to.ix() < 8 || 55 < mv.to.ix() {
+    if mv.to < Square::a1 || Square::h7 < mv.to {
         for spc in [KNIGHT, BISHOP, ROOK, QUEEN] {
             mv.special = Some(spc);
 
@@ -143,78 +227,57 @@ fn promotions<BB: BitBoard, L: Blesser>(
     }
 }
 
-// impl BitBoard {
-//     pub fn list_pseudomoves<P: Panopticon>(&self, _buffer: &mut Vec<PseudoLegal>) {}
+fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: Blesser<'a>>(
+    board: &'a BB,
+    blesser: &L,
+    pieces: u64,
+    friendly: u64,
+    piece: P,
+    buffer: &mut Vec<L::Blessed>,
+) {
+    biterate! {for from in pieces; {
+        biterate! {for to in piece.hits(from, friendly); {
+            let mut mv = BitMove {
+                from, to,
+                ech: ChessEchelon::from(P::ID),
+                special: None,
+                capture: board.comm_at(to),
+            };
 
-//     pub fn list_moves(&self, _buffer: &mut Vec<Legal>) {}
+            blesser.bless_into(board, mv, buffer);
+        }}
+    }}
+}
 
-//     pub fn bless<P: Panopticon>(&self, mv: PseudoLegal) -> Option<Legal> {
-//         None
-//     }
+fn castling_move<'a, BB: BitBoard, L: Blesser<'a>>(
+    board: &'a BB,
+    blesser: &L,
+    total: u64,
+    buffer: &mut Vec<L::Blessed>,
+) {
+    use CastlingDirection::*;
 
-//     fn attacks<P: Panopticon>(&self, player: Color) -> u64 {
-//         let friendly = self.colors[self.player as usize];
-//         let enemy = self.colors[self.player.opp() as usize];
-//         let total = friendly | enemy;
-//         let pan = P::new(total);
+    let player = board.ply().0;
+    let rights = board.trans().rights;
+    let castling = board.castling();
 
-//         let king = self.men[ChessMan::KING as usize - 1] & friendly;
-//         let superpiece_mask = pan.queen().surveil(king) | pan.knight().surveil(king);
-//         let superpiece_mask = enemy & superpiece_mask;
-//         let mut threats = 0;
+    for dir in [EAST, WEST] {
+        if !rights[player.ix()][dir.ix()] {
+            continue;
+        }
 
-//         let pawn = (self.men[ChessMan::PAWN as usize - 1] & superpiece_mask);
-//         threats |= pan.white_pawn().surveil(pawn);
+        if (castling.space[dir.ix()] & castling.back_rank[player.ix()] & total) != 0 {
+            continue;
+        }
 
-//         let knight = (self.men[ChessMan::PAWN as usize - 1] & superpiece_mask);
-//         threats |= pan.knight().surveil(knight);
+        let mv = BitMove {
+            from: castling.king_start[player.ix()],
+            to: castling.king_end[player.ix()][dir.ix()],
+            ech: ChessEchelon::KING,
+            special: Some(SpecialMove::from(dir)),
+            capture: None,
+        };
 
-//         let bishop = (self.men[ChessMan::BISHOP as usize - 1] & superpiece_mask);
-//         threats |= pan.bishop().surveil(bishop);
-
-//         let rook = (self.men[ChessMan::ROOK as usize - 1] & superpiece_mask);
-//         threats |= pan.rook().surveil(rook);
-
-//         let queen = (self.men[ChessMan::QUEEN as usize - 1] & superpiece_mask);
-//         threats |= pan.queen().surveil(queen);
-
-//         return threats;
-//     }
-// }
-
-// trait BitBoardAttackStrat {
-//     fn attacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64;
-//     fn counterattacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64;
-// }
-
-// #[repr(transparent)]
-// struct CopyMakeAttacks<'a>(&'a BitBoard);
-
-// impl<'a> BitBoardAttackStrat for CopyMakeAttacks<'a> {
-//     fn counterattacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64 {
-//         let mut board = self.0.clone();
-//         let bits = (1 << mv.from as u8) ^ (1 << mv.to as u128);
-//         board.fake_move(mv);
-//         board.attacks::<P>(player.opp())
-//     }
-
-//     fn attacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64 {
-//         let mut board = self.0.clone();
-//         let bits = (1 << mv.from as u8) ^ (1 << mv.to as u128);
-//         board.fake_move(mv);
-//         board.attacks::<P>(player)
-//     }
-// }
-
-// #[repr(transparent)]
-// struct MakeUnmakeAttacks<'a>(&'a BitBoard);
-
-// impl<'a> BitBoardAttackStrat for MakeUnmakeAttacks<'a> {
-//     fn attacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64 {
-//         0
-//     }
-
-//     fn counterattacks_after_move<P: Panopticon>(self, player: Color, mv: BitMove) -> u64 {
-//         0
-//     }
-// }
+        blesser.bless_into(board, mv, buffer);
+    }
+}

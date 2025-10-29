@@ -50,8 +50,8 @@ use strum::VariantArray;
 use crate::{
     biterate,
     model::{
-        CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, attacks::PieceVision,
-        utils::bitor_sum,
+        CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, utils::bitor_sum,
+        vision::PieceVision,
     },
 };
 

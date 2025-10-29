@@ -23,7 +23,7 @@ use strum::VariantArray;
 
 use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, ChessPromotion,
-    EnPassant, Legal, PseudoLegal, SpecialMove, Square, Transients,
+    EnPassant, LegalMove, PseudoLegal, SpecialMove, Square, Transients,
     bitboard::{BitBoard, ChessBoard, MetaBoard},
     castling::{CLASSIC_CASTLING, Castling},
     hash::{NoHashes, ZobristTables},
@@ -34,7 +34,10 @@ use crate::model::{
 ///
 /// If `mv` is not a legal move that was just generated in accordance with `board`,
 /// the behavior is unspecified.
-pub fn make_legal_move<BB: BitBoard, ZT: ZobristTables>(board: &mut BB, mv: Legal) -> Transients {
+pub fn make_legal_move<BB: BitBoard, ZT: ZobristTables>(
+    board: &mut BB,
+    mv: LegalMove,
+) -> Transients {
     let zobristhashes = ZT::static_table();
 
     let res = board.trans();
@@ -55,7 +58,7 @@ pub fn make_legal_move<BB: BitBoard, ZT: ZobristTables>(board: &mut BB, mv: Lega
 /// the result of calling [`make_legal_move`], then the behavior is unspecified.
 pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: Legal,
+    mv: LegalMove,
     trans: Transients,
 ) {
     let zobristhashes = ZT::static_table();
@@ -73,7 +76,10 @@ pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
 }
 
 /// Clone the board and make the legal move on the clone.
-pub fn clone_make_legal_move<BB: BitBoard + Clone, ZT: ZobristTables>(board: &BB, mv: Legal) -> BB {
+pub fn clone_make_legal_move<BB: BitBoard + Clone, ZT: ZobristTables>(
+    board: &BB,
+    mv: LegalMove,
+) -> BB {
     let mut res = board.clone();
     make_legal_move::<BB, ZT>(&mut res, mv);
     res
@@ -85,7 +91,7 @@ pub fn clone_make_legal_move<BB: BitBoard + Clone, ZT: ZobristTables>(board: &BB
 /// This can be used for analyzing whether a move puts the king in check.
 pub fn clone_make_pseudolegal_move<BB: BitBoard + Clone>(board: &BB, mv: PseudoLegal) -> BB {
     let mut res = board.clone();
-    make_legal_move::<MoveOnly<BB>, NoHashes>(&mut MoveOnly(&mut res), Legal(mv.0));
+    make_legal_move::<MoveOnly<BB>, NoHashes>(&mut MoveOnly(&mut res), LegalMove(mv.0));
     res
 }
 
@@ -97,7 +103,7 @@ pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: Bi
         board.ply().0,
         board.castling(),
     );
-    make_legal_move::<HashOnly, ZT>(&mut res, Legal(mv));
+    make_legal_move::<HashOnly, ZT>(&mut res, LegalMove(mv));
     res.0
 }
 
@@ -139,12 +145,15 @@ pub fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
     sq: Square,
     zobristhashes: &'static ZT,
 ) {
+    use CastlingDirection::*;
     if piece != ChessEchelon::ROOK {
         return;
     }
 
-    for dir in [CastlingDirection::EAST, CastlingDirection::WEST] {
-        if sq == board.castling().rook_from[dir.ix()] {
+    let castling = board.castling();
+
+    for dir in [EAST, WEST] {
+        if sq == castling.rook_start[color.ix()][dir.ix()] {
             let mut rights = board.trans().rights;
 
             board.hash(zobristhashes.hash_rights(rights));
@@ -279,14 +288,9 @@ pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
         return;
     };
 
-    let rank = if player.is_black() {
-        0xFF00_0000_0000_0000
-    } else {
-        0x0000_0000_0000_00FF
-    };
-
-    let king_move = board.castling().king_move[castle.ix()] & rank;
-    let rook_move = board.castling().rook_move[castle.ix()] & rank;
+    let back_rank = board.castling().back_rank[player.ix()];
+    let king_move = board.castling().king_move[castle.ix()] & back_rank;
+    let rook_move = board.castling().rook_move[castle.ix()] & back_rank;
 
     let mut rights = board.trans().rights;
 
@@ -307,6 +311,12 @@ pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
 /// A wrapper for a [`BitBoard`]-type which only makes moves, without updating metadata or hashing.
 #[repr(transparent)]
 pub struct MoveOnly<'a, BB: BitBoard>(pub &'a mut BB);
+
+impl<'a, BB: BitBoard> Clone for MoveOnly<'a, BB> {
+    fn clone(&self) -> Self {
+        panic!("Not actually cloneable")
+    }
+}
 
 impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
     #[inline]
@@ -363,6 +373,10 @@ impl<'a, BB: BitBoard> ChessBoard for MoveOnly<'a, BB> {
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
         0
     }
+
+    fn empty() -> Self {
+        panic!("Not implemented.");
+    }
 }
 
 impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
@@ -389,9 +403,14 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
         None
     }
+
+    fn side(&self, color: ChessColor) -> std::borrow::Cow<'_, [u64; 6]> {
+        std::borrow::Cow::Owned([0; 6])
+    }
 }
 
 /// An empty [`BitBoard`]-type which only hashes, without updating metadata or moving.
+#[derive(Debug, Clone, Copy)]
 pub struct HashOnly(
     pub u64,
     pub Transients,
@@ -459,6 +478,10 @@ impl ChessBoard for HashOnly {
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
         self.0
     }
+
+    fn empty() -> Self {
+        Self(0, Transients::empty(), ChessColor::WHITE, &CLASSIC_CASTLING)
+    }
 }
 
 impl BitBoard for HashOnly {
@@ -482,5 +505,9 @@ impl BitBoard for HashOnly {
 
     fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
         None
+    }
+
+    fn side(&self, color: ChessColor) -> std::borrow::Cow<'_, [u64; 6]> {
+        std::borrow::Cow::Owned([0; 6])
     }
 }

@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::model::{
-    BitMove, Legal, Transients,
+    BitMove, LegalMove, Transients,
     hash::ZobHasher,
     notation::{AlgNotaion, CoordNotation},
 };

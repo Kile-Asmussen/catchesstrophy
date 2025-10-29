@@ -3,17 +3,17 @@ use std::marker::PhantomData;
 use crate::{
     biterate,
     model::{
-        ChessColor, Square,
+        ChessColor, ChessPiece, Square,
         binary::{
             bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
-            black_pawn_attack_fill_simdx2, knight_dumbfill_simdx4, queen_diff_obs_simdx4,
-            rook_diff_obs_simdx2, white_pawn_advance_fill, white_pawn_attack_fill,
-            white_pawn_attack_fill_simdx2,
+            black_pawn_attack_fill_simdx2, king_dumbfill_simdx4, knight_dumbfill_simdx4,
+            queen_diff_obs_simdx4, rook_diff_obs_simdx2, white_pawn_advance_fill,
+            white_pawn_attack_fill, white_pawn_attack_fill_simdx2,
         },
     },
 };
 
-type DefaultChessMen = ChessMen<
+pub type MostlyBits = SimplePanopticon<
     PawnsBitBlit<true>,
     PawnsBitBlit<false>,
     KnightDumbfill,
@@ -23,17 +23,21 @@ type DefaultChessMen = ChessMen<
     KingDumbfill,
 >;
 
-pub struct ChessMen<WP, BP, N, B, R, Q, K>(u64, PhantomData<(WP, BP, N, B, R, Q, K)>)
+#[derive(Debug, Clone, Copy)]
+pub struct SimplePanopticon<WhitePawn, BlackPawn, Knight, Bishop, Rook, Queen, King>(
+    u64,
+    PhantomData<(WhitePawn, BlackPawn, Knight, Bishop, Rook, Queen, King)>,
+)
 where
-    WP: PawnVision,
-    BP: PawnVision,
-    N: PieceVision,
-    B: PieceVision,
-    R: PieceVision,
-    Q: PieceVision,
-    K: PieceVision;
+    WhitePawn: PawnVision,
+    BlackPawn: PawnVision,
+    Knight: PieceVision,
+    Bishop: PieceVision,
+    Rook: PieceVision,
+    Queen: PieceVision,
+    King: PieceVision;
 
-pub trait Panopticon {
+pub trait Panopticon: Clone + Copy {
     fn new(total: u64) -> Self;
     fn white_pawn(&self) -> impl PawnVision;
     fn black_pawn(&self) -> impl PawnVision;
@@ -44,15 +48,16 @@ pub trait Panopticon {
     fn king(&self) -> impl PieceVision;
 }
 
-impl<WP, BP, N, B, R, Q, K> Panopticon for ChessMen<WP, BP, N, B, R, Q, K>
+impl<WhitePawn, BlackPawn, Knight, Bishop, Rook, Queen, King> Panopticon
+    for SimplePanopticon<WhitePawn, BlackPawn, Knight, Bishop, Rook, Queen, King>
 where
-    WP: PawnVision,
-    BP: PawnVision,
-    N: PieceVision,
-    B: PieceVision,
-    R: PieceVision,
-    Q: PieceVision,
-    K: PieceVision,
+    WhitePawn: PawnVision,
+    BlackPawn: PawnVision,
+    Knight: PieceVision,
+    Bishop: PieceVision,
+    Rook: PieceVision,
+    Queen: PieceVision,
+    King: PieceVision,
 {
     fn new(total: u64) -> Self {
         Self(total, PhantomData)
@@ -60,37 +65,37 @@ where
 
     #[inline]
     fn white_pawn(&self) -> impl PawnVision {
-        WP::new(self.0)
+        WhitePawn::new(self.0)
     }
 
     #[inline]
     fn black_pawn(&self) -> impl PawnVision {
-        WP::new(self.0)
+        BlackPawn::new(self.0)
     }
 
     #[inline]
     fn knight(&self) -> impl PieceVision {
-        N::new(self.0)
+        Knight::new(self.0)
     }
 
     #[inline]
     fn bishop(&self) -> impl PieceVision {
-        B::new(self.0)
+        Bishop::new(self.0)
     }
 
     #[inline]
     fn rook(&self) -> impl PieceVision {
-        R::new(self.0)
+        Rook::new(self.0)
     }
 
     #[inline]
     fn queen(&self) -> impl PieceVision {
-        R::new(self.0)
+        Queen::new(self.0)
     }
 
     #[inline]
     fn king(&self) -> impl PieceVision {
-        K::new(self.0)
+        King::new(self.0)
     }
 }
 
@@ -117,12 +122,14 @@ pub trait PieceVision: Vision {
     fn hits(self, sq: Square, friendly: u64) -> u64 {
         self.see(sq) & !friendly
     }
+
+    const ID: ChessPiece;
 }
 
 pub trait PawnVision: Vision {
     #[inline]
     fn hits(self, sq: Square, enemy_and_eps: u64) -> u64 {
-        self.see(sq) & enemy_and_eps | self.push(sq)
+        self.see(sq) & enemy_and_eps
     }
 
     #[inline]
@@ -187,7 +194,9 @@ impl Vision for FastObsDiffRook {
     }
 }
 
-impl PieceVision for FastObsDiffRook {}
+impl PieceVision for FastObsDiffRook {
+    const ID: ChessPiece = ChessPiece::ROOK;
+}
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
@@ -205,7 +214,9 @@ impl Vision for FastObsDiffBishop {
     }
 }
 
-impl PieceVision for FastObsDiffBishop {}
+impl PieceVision for FastObsDiffBishop {
+    const ID: ChessPiece = ChessPiece::BISHOP;
+}
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
@@ -223,7 +234,9 @@ impl Vision for FastObsDiffQueen {
     }
 }
 
-impl PieceVision for FastObsDiffQueen {}
+impl PieceVision for FastObsDiffQueen {
+    const ID: ChessPiece = ChessPiece::QUEEN;
+}
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
@@ -241,7 +254,9 @@ impl Vision for KnightDumbfill {
     }
 }
 
-impl PieceVision for KnightDumbfill {}
+impl PieceVision for KnightDumbfill {
+    const ID: ChessPiece = ChessPiece::KNIGHT;
+}
 
 #[derive(Clone, Copy, Debug)]
 #[repr(transparent)]
@@ -255,8 +270,10 @@ impl Vision for KingDumbfill {
 
     #[inline]
     fn surveil(self, mut mask: u64) -> u64 {
-        knight_dumbfill_simdx4(mask)
+        king_dumbfill_simdx4(mask)
     }
 }
 
-impl PieceVision for KingDumbfill {}
+impl PieceVision for KingDumbfill {
+    const ID: ChessPiece = ChessPiece::KING;
+}

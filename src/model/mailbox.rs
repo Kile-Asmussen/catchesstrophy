@@ -16,8 +16,8 @@ use strum::VariantArray;
 use crate::{
     biterate,
     model::{
-        ChessColor, ChessEchelon, ChessMan, Square, attacks::ChessMen, bitboard::BitBoard,
-        utils::SliceExtensions,
+        ChessColor, ChessEchelon, ChessMan, Square, bitboard::BitBoard, utils::SliceExtensions,
+        vision::SimplePanopticon,
     },
 };
 
@@ -38,8 +38,12 @@ impl<T> Mailbox<T> {
         res
     }
 
+    pub fn set(&mut self, sq: Square, it: T) {
+        self.0[sq.ix()] = it
+    }
+
     /// Assign values to all squares for which a bit is set in the given mask.
-    pub fn set(&mut self, mask: u64, mut v: impl FnMut(Square) -> T) {
+    pub fn set_mask(&mut self, mask: u64, mut v: impl FnMut(Square) -> T) {
         biterate! {for sq in mask; {
             self.0[sq.ix()] = v(sq);
         }}
@@ -52,9 +56,19 @@ impl Mailbox<Option<ChessMan>> {
         let mut res = Self([None; 64]);
 
         for cm in ChessMan::VARIANTS.clones() {
-            res.set(bb.men(cm.col(), cm.ech()), |_| Some(cm));
+            res.set_mask(bb.men(cm.col(), cm.ech()), |_| Some(cm));
         }
 
         res
+    }
+
+    pub fn as_bitboard<BB: BitBoard>(&self) -> BB {
+        let mut bb = BB::empty();
+
+        for cm in ChessMan::VARIANTS.clones() {
+            bb.xor(cm.col(), cm.ech(), self.mask(|sq, x| x == &Some(cm)));
+        }
+
+        bb
     }
 }
