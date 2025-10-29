@@ -106,6 +106,7 @@ pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: Bi
 /// - A chessman moves from one square to another
 /// - Optionally captures a chessman of the opposing color at its destination
 /// - A forefit of castling rights may occur if a rook moves from its starting square
+#[inline]
 pub fn simple_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
@@ -305,7 +306,7 @@ pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
 
 /// A wrapper for a [`BitBoard`]-type which only makes moves, without updating metadata or hashing.
 #[repr(transparent)]
-struct MoveOnly<'a, BB: BitBoard>(&'a mut BB);
+pub struct MoveOnly<'a, BB: BitBoard>(pub &'a mut BB);
 
 impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
     #[inline]
@@ -387,7 +388,7 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
 }
 
 /// An empty [`BitBoard`]-type which only hashes, without updating metadata or moving.
-struct HashOnly(
+pub struct HashOnly(
     pub u64,
     pub Transients,
     pub ChessColor,
@@ -457,16 +458,20 @@ impl ChessBoard for HashOnly {
 }
 
 impl BitBoard for HashOnly {
+    #[inline]
     fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {}
 
+    #[inline]
     fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
         0
     }
 
+    #[inline]
     fn color(&self, color: ChessColor) -> u64 {
         0
     }
 
+    #[inline]
     fn total(&self) -> u64 {
         0
     }
