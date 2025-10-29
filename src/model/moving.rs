@@ -1,3 +1,22 @@
+//! Making moves.
+//!
+//! See [`crate::model::BitMove`].
+//!
+//! Out move model accounts for four cases:
+//! - the move is a simple move, see [`simple_move`]
+//! - the move is a promotion move, see [`promotion_move`]
+//! - the move is a special pawn move interacting with the _en passant_ rule, see [`pawn_special`]
+//! - the move is a castling move, see [`castling_move`]
+//!
+//! Additionally:
+//!
+//! - a simple and promotion and special pawn move can be with captures, see [`capturing_move`]
+//! - a move that either moves or captures a rook results in a loss of castling rights, see [`rook_rights_loss`]
+//!
+//! These are combined into all the utilities needed to make moves on a chessboard, and
+//! are implemented using the [`BitBoard`] trait as a visitor pattern. Two additonal visitors
+//! are supplied, for purely hashing, and for only moving without metadata updates.
+
 use std::{hash::Hash, marker::PhantomData};
 
 use strum::VariantArray;
@@ -12,12 +31,6 @@ use crate::model::{
 };
 
 /// Make a legal move on a bitboard given a Zobrist hashing table
-///
-/// This accounts for four cases:
-/// - the move is a simple move with/without capture
-/// - the move is a promotion move with/without capture
-/// - the move is a special pawn move interacting with the _en passant_ rule
-/// - the move is a castling move
 ///
 /// If `mv` is not a legal move that was just generated in accordance with `board`,
 /// the behavior is unspecified.
@@ -88,7 +101,12 @@ pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: Bi
     res.0
 }
 
-fn simple_move<BB: BitBoard, ZT: ZobristTables>(
+/// Make a simple move on a chessboard:
+///
+/// - A chessman moves from one square to another
+/// - Optionally captures a chessman of the opposing color at its destination
+/// - A forefit of castling rights may occur if a rook moves from its starting square
+pub fn simple_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
     zobristhashes: &'static ZT,
@@ -106,13 +124,14 @@ fn simple_move<BB: BitBoard, ZT: ZobristTables>(
     board.xor(player, mv.ech, bits);
 
     rook_rights_loss(board, mv.ech, player, mv.from, zobristhashes);
-    capture(board, mv, mv.to, zobristhashes);
+    capturing_move(board, mv, mv.to, zobristhashes);
 
     board.hash(zobristhashes.hash_move(player, mv.ech, bits));
 }
 
+/// The loss of rook rights, either from having a rook captured, or moving it from its starting square.
 #[inline]
-fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
+pub fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     piece: ChessEchelon,
     color: ChessColor,
@@ -137,8 +156,12 @@ fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
     }
 }
 
+/// A capturing move:
+///
+/// - A chessman of opposing color disappears from the board
+/// - A loss of castling rights occur if the captured piece is a rook on its starting square
 #[inline]
-fn capture<BB: BitBoard, ZT: ZobristTables>(
+pub fn capturing_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
     sq: Square,
@@ -160,8 +183,14 @@ fn capture<BB: BitBoard, ZT: ZobristTables>(
     board.hash(zobristhashes.hash_square(opponent, man, sq));
 }
 
+/// Make a pawn special move:
+///
+/// - _En passant_ capture, or
+/// - Double-push incurring an _en passant_ vulnerability
+///
+/// Also clears the _en passant_ information for all moves
 #[inline]
-fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
+pub fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
     zobristhashes: &'static ZT,
@@ -188,7 +217,7 @@ fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
     board.hash(zobristhashes.hash_move(player, ChessEchelon::PAWN, bits));
 
     if let Some(en_passant) = en_passant {
-        capture(board, mv, en_passant.capture, zobristhashes);
+        capturing_move(board, mv, en_passant.capture, zobristhashes);
     }
 
     if (mv.from as u8).abs_diff(mv.to as u8) == 16 {
@@ -203,8 +232,13 @@ fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
     }
 }
 
+/// A pawn promotion move:
+///
+/// - A pawn moves or captures onto the enemy back rank
+/// - The pawn disappears
+/// - A new non-king piece appears on its destination square
 #[inline]
-fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
+pub fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
     zobristhashes: &'static ZT,
@@ -219,14 +253,21 @@ fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
     board.xor(player, ChessEchelon::PAWN, 1 << mv.from.ix());
     board.xor(player, prom, 1 << mv.to.ix());
 
-    capture(board, mv, mv.to, zobristhashes);
+    capturing_move(board, mv, mv.to, zobristhashes);
 
     board.hash(zobristhashes.hash_square(player, ChessEchelon::PAWN, mv.from));
     board.hash(zobristhashes.hash_square(player, prom, mv.to));
 }
 
+/// A castling move:
+///
+/// - The king and rook both move
+/// - No captures occur
+/// - Expenditure of castling rights
+///
+/// This function also forefeits castling rights if the king moves in general.
 #[inline]
-fn castling_move<BB: BitBoard, ZT: ZobristTables>(
+pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
     mv: BitMove,
     zobristhashes: &'static ZT,
@@ -262,6 +303,7 @@ fn castling_move<BB: BitBoard, ZT: ZobristTables>(
     board.hash(zobristhashes.hash_castling(player, king_move, rook_move));
 }
 
+/// A wrapper for a [`BitBoard`]-type which only makes moves, without updating metadata or hashing.
 #[repr(transparent)]
 struct MoveOnly<'a, BB: BitBoard>(&'a mut BB);
 
@@ -344,7 +386,13 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     }
 }
 
-struct HashOnly(u64, Transients, ChessColor, &'static Castling);
+/// An empty [`BitBoard`]-type which only hashes, without updating metadata or moving.
+struct HashOnly(
+    pub u64,
+    pub Transients,
+    pub ChessColor,
+    pub &'static Castling,
+);
 
 impl MetaBoard for HashOnly {
     #[inline]
