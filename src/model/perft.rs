@@ -57,6 +57,7 @@ pub fn perft<
     PerfTestRes {
         elapsed_duration: now.elapsed(),
         breakdown,
+        depth,
     }
 }
 
