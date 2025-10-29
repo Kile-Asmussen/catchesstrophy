@@ -385,6 +385,10 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     fn total(&self) -> u64 {
         0
     }
+
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+        None
+    }
 }
 
 /// An empty [`BitBoard`]-type which only hashes, without updating metadata or moving.
@@ -474,5 +478,9 @@ impl BitBoard for HashOnly {
     #[inline]
     fn total(&self) -> u64 {
         0
+    }
+
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+        None
     }
 }

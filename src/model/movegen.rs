@@ -6,7 +6,7 @@ use crate::model::{
     utils::biterate,
 };
 
-trait Blesser {
+pub trait Blesser {
     type Blessed;
     fn new(total: u64) -> Self;
 
@@ -32,7 +32,7 @@ impl Blesser for NoBlessing {
     fn new(total: u64) -> Self {
         NoBlessing
     }
-    
+
     #[inline]
     fn bless<BB: BitBoard>(&self, board: &BB, mv: BitMove) -> Option<Self::Blessed> {
         Some(PseudoLegal(mv))
@@ -42,7 +42,7 @@ impl Blesser for NoBlessing {
 pub struct LegalOnly<X: Panopticon>(X);
 
 impl<X: Panopticon> Blesser for LegalOnly<X> {
-    type Blessed = Legal
+    type Blessed = Legal;
 
     fn new(total: u64) -> Self {
         LegalOnly(X::new(total))
@@ -101,10 +101,9 @@ pub fn pawn_moves<P: PawnVision, BB: BitBoard, L: Blesser>(
 
             if from.ix().abs_diff(to.ix()) == 16 {
                 mv.special = Some(SpecialMove::PAWN);
-                blesser.bless_into(board, mv, buffer);
-            } else {
-                promotions(board, blesser, mv, buffer);
             }
+
+            promotions(board, blesser, mv, buffer);
         }}
 
         biterate! {for to in pawn_vision.hits(from, enemy); {
@@ -112,22 +111,26 @@ pub fn pawn_moves<P: PawnVision, BB: BitBoard, L: Blesser>(
                 from, to,
                 ech: ChessEchelon::PAWN,
                 special: None,
-                capture: None,
+                capture: board.comm_at(to),
             };
 
-            if Some(to) == eps.1 {
+            if mv.capture.is_none() {
                 mv.special = Some(SpecialMove::PAWN);
                 mv.capture = Some(ChessCommoner::PAWN);
-                blesser.bless_into(board, mv, buffer);
-            } else {
-                promotions(board, blesser, mv, buffer);
             }
+
+            promotions(board, blesser, mv, buffer);
         }}
 
     }}
 }
 
-fn promotions<BB: BitBoard, L: Blesser>(board: &BB, blesser: &L, mut mv: BitMove, buffer: &mut Vec<L::Blessed>) {
+fn promotions<BB: BitBoard, L: Blesser>(
+    board: &BB,
+    blesser: &L,
+    mut mv: BitMove,
+    buffer: &mut Vec<L::Blessed>,
+) {
     use SpecialMove::*;
     if mv.to.ix() < 8 || 55 < mv.to.ix() {
         for spc in [KNIGHT, BISHOP, ROOK, QUEEN] {
