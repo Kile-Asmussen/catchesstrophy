@@ -584,6 +584,16 @@ pub struct Transients {
     pub rights: [[bool; 2]; 2],
 }
 
+impl Transients {
+    fn startpos() -> Self {
+        Self {
+            en_passant: None,
+            halfmove_clock: 0,
+            rights: [[true; 2]; 2],
+        }
+    }
+}
+
 /// Representation of the en-passant capture rule.
 ///
 /// En-passant capture is a special pawn capture, where

@@ -16,9 +16,13 @@
 //! This allows very fast lookups of the presence or absence of pieces,
 //! as well as several advanced arithmetic tricks to compute difficult
 //! quantities.
+//!
+//! Three distinct implementations are provided in this module, for
+//! profiling. Their interfaces are identical and they can be substituted
+//! for one another without loss of correctness.
 
 use crate::model::{
-    ChessColor, ChessEchelon, ChessMan, Transients,
+    ChessColor, ChessEchelon, ChessMan, EnPassant, Transients,
     castling::{CLASSIC_CASTLING, Castling},
     hash::ZobristTables,
     utils::bitor_sum,
@@ -87,8 +91,14 @@ pub trait MetaBoard {
     /// I am very funny.
     fn trans(&self) -> Transients;
 
-    /// Mutable access to the transient values.
-    fn trans_mut(&mut self) -> &mut Transients;
+    /// Update the half-move clock transient values.
+    fn set_halfmove_clock(&mut self, val: u8);
+
+    /// Update the castling rights in the transient values.
+    fn set_castling_rights(&mut self, rights: [[bool; 2]; 2]);
+
+    /// Update the _en-passant_ information in the transient values.
+    fn set_en_passant(&mut self, eps: Option<EnPassant>);
 
     /// Current Zobrist hash of the position.
     fn curr_hash(&self) -> u64;
@@ -149,11 +159,6 @@ impl PartialEq for DefaultMetaBoard {
 
 impl MetaBoard for DefaultMetaBoard {
     #[inline]
-    fn trans_mut(&mut self) -> &mut Transients {
-        &mut self.trans
-    }
-
-    #[inline]
     fn castling(&self) -> &'static Castling {
         self.castling
     }
@@ -192,6 +197,21 @@ impl MetaBoard for DefaultMetaBoard {
     #[inline]
     fn hash(&mut self, hash: u64) {
         self.hash ^= hash;
+    }
+
+    #[inline]
+    fn set_halfmove_clock(&mut self, val: u8) {
+        self.trans.halfmove_clock = val;
+    }
+
+    #[inline]
+    fn set_castling_rights(&mut self, rights: [[bool; 2]; 2]) {
+        self.trans.rights = rights;
+    }
+
+    #[inline]
+    fn set_en_passant(&mut self, rights: Option<EnPassant>) {
+        self.trans.en_passant = rights;
     }
 }
 
@@ -240,11 +260,6 @@ pub trait HasDefaultMetaBoard {
 
 impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     #[inline]
-    fn trans_mut(&mut self) -> &mut Transients {
-        self.metaboard_mut().trans_mut()
-    }
-
-    #[inline]
     fn trans(&self) -> Transients {
         self.metaboard().trans()
     }
@@ -277,6 +292,21 @@ impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     #[inline]
     fn castling(&self) -> &'static Castling {
         self.metaboard().castling()
+    }
+
+    #[inline]
+    fn set_halfmove_clock(&mut self, val: u8) {
+        self.metaboard_mut().set_halfmove_clock(val);
+    }
+
+    #[inline]
+    fn set_castling_rights(&mut self, rights: [[bool; 2]; 2]) {
+        self.metaboard_mut().set_castling_rights(rights);
+    }
+
+    #[inline]
+    fn set_en_passant(&mut self, eps: Option<EnPassant>) {
+        self.metaboard_mut().set_en_passant(eps);
     }
 }
 
@@ -517,6 +547,15 @@ impl ChessBoard for FullBitBoard {
     }
 }
 
+/// A slight optimization of the [`FullBitBoard`].
+///
+/// In this version, each side of the chessboard is updated
+/// concurrently with the individual chessmen masks, a kind of
+/// compromise between the compact and naive implementation.
+///
+/// This is done because move generation relies heavily on being
+/// able to compute the occupancies of colors and the whole board
+/// for determining which squares are blocked.
 #[derive(Debug, Clone)]
 pub struct FullerBitBoard {
     pub bitboard: FullBitBoard,
@@ -524,22 +563,26 @@ pub struct FullerBitBoard {
 }
 
 impl BitBoard for FullerBitBoard {
+    /// Updates both the chessman mask and the color mask separately.
     #[inline]
     fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
         self.bitboard.xor(color, ech, mask);
         self.total[color.ix()] ^= mask;
     }
 
+    /// On hand directly.
     #[inline]
     fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
         self.bitboard.men(color, ech)
     }
 
+    /// On hand directly.
     #[inline]
     fn color(&self, color: ChessColor) -> u64 {
         self.total[color.ix()]
     }
 
+    /// Computed in a single OR-instruction.
     #[inline]
     fn total(&self) -> u64 {
         bitor_sum(&self.total)
