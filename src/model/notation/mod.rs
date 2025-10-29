@@ -1,10 +1,13 @@
-use std::fmt::{Display, write};
+use std::{
+    cmp::Ordering,
+    fmt::{Display, write},
+};
 
 use strum::EnumIs;
 
 use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessMan, ChessPawn, ChessPiece,
-    ChessPromotion, EnPassant, SpecialMove, Square, Transients, VariantNames,
+    EnPassant, PawnPromotion, SpecialMove, Square, Transients, VariantNames,
     castling::Castling,
     utils::{IteratorExtensions, SliceExtensions},
 };
@@ -81,7 +84,7 @@ impl Display for ChessColor {
     }
 }
 
-impl Display for ChessPromotion {
+impl Display for PawnPromotion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:#}", ChessEchelon::from(*self))
     }
@@ -164,7 +167,69 @@ impl Display for TransientInfo {
 pub struct CoordNotation {
     pub from: Square,
     pub to: Square,
-    pub prom: Option<ChessPromotion>,
+    pub prom: Option<PawnPromotion>,
+}
+
+impl From<BitMove> for CoordNotation {
+    #[inline]
+    fn from(value: BitMove) -> Self {
+        Self {
+            from: value.from,
+            to: value.to,
+            prom: PawnPromotion::from_special(value.special),
+        }
+    }
+}
+
+#[test]
+fn coord_notation_ord() {
+    assert!(
+        (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: None
+        }) < (CoordNotation {
+            from: Square::a1,
+            to: Square::a4,
+            prom: None
+        })
+    );
+
+    assert!(
+        (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: None
+        }) < (CoordNotation {
+            from: Square::b1,
+            to: Square::a3,
+            prom: None
+        })
+    );
+
+    assert!(
+        (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: None
+        }) < (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: Some(PawnPromotion::KNIGHT)
+        })
+    );
+
+    assert!(
+        (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: Some(PawnPromotion::KNIGHT)
+        }) < (CoordNotation {
+            from: Square::a1,
+            to: Square::a3,
+            prom: Some(PawnPromotion::BISHOP)
+        })
+    );
 }
 
 impl Display for CoordNotation {
@@ -199,7 +264,7 @@ pub struct AlgPawn {
     pub from: Square,
     pub to: Square,
     pub capture: bool,
-    pub promote: Option<ChessPromotion>,
+    pub promote: Option<PawnPromotion>,
 }
 
 impl Display for AlgPawn {
@@ -309,7 +374,7 @@ impl MoveMatcher for CoordNotation {
     fn matches(self, mv: BitMove) -> bool {
         self.from == mv.from
             && self.to == mv.to
-            && (self.prom.is_none() || self.prom == ChessPromotion::from_special(mv.special))
+            && (self.prom.is_none() || self.prom == PawnPromotion::from_special(mv.special))
     }
 }
 
@@ -321,7 +386,7 @@ impl MoveMatcher for AlgNotaion {
                     && (p.from as u8 & 0x7) == (mv.from as u8 & 0x7)
                     && p.to == mv.to
                     && p.capture == mv.capture.is_some()
-                    && p.promote == ChessPromotion::from_special(mv.special)
+                    && p.promote == PawnPromotion::from_special(mv.special)
             }
             Self::Piece(p, _) => {
                 mv.ech == ChessEchelon::from(p.piece)

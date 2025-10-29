@@ -16,6 +16,7 @@ pub mod mailbox;
 pub mod movegen;
 pub mod moving;
 pub mod notation;
+pub mod perft;
 pub mod utils;
 pub mod vision;
 
@@ -244,9 +245,9 @@ impl From<ChessPawn> for ChessEchelon {
 }
 
 /// Subset inclusion.
-impl From<ChessPromotion> for ChessEchelon {
+impl From<PawnPromotion> for ChessEchelon {
     #[inline]
-    fn from(value: ChessPromotion) -> Self {
+    fn from(value: PawnPromotion) -> Self {
         unsafe { std::mem::transmute(value) }
     }
 }
@@ -338,14 +339,14 @@ impl ChessCommoner {
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-pub enum ChessPromotion {
+pub enum PawnPromotion {
     KNIGHT = 2,
     BISHOP = 3,
     ROOK = 4,
     QUEEN = 5,
 }
 
-impl ChessPromotion {
+impl PawnPromotion {
     /// See [`ChessEchelon::ix`].
     #[inline]
     pub fn ix(self) -> usize {
@@ -453,9 +454,9 @@ impl From<ChessPawn> for SpecialMove {
 }
 
 /// Subset inclusion.
-impl From<ChessPromotion> for SpecialMove {
+impl From<PawnPromotion> for SpecialMove {
     #[inline]
-    fn from(value: ChessPromotion) -> Self {
+    fn from(value: PawnPromotion) -> Self {
         unsafe { std::mem::transmute(value) }
     }
 }
@@ -487,7 +488,7 @@ impl ChessPawn {
     }
 }
 
-impl ChessPromotion {
+impl PawnPromotion {
     /// Attempt to convert from special move.
     fn from_special(special: Option<SpecialMove>) -> Option<Self> {
         let special = special?;

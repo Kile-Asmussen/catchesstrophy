@@ -185,7 +185,7 @@ pub struct FastObsDiffRook(u64);
 impl Vision for FastObsDiffRook {
     #[inline]
     fn new(total: u64) -> Self {
-        Self(!total)
+        Self(total)
     }
 
     #[inline]

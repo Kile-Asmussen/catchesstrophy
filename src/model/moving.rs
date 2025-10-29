@@ -22,8 +22,8 @@ use std::{hash::Hash, marker::PhantomData};
 use strum::VariantArray;
 
 use crate::model::{
-    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, ChessPromotion,
-    EnPassant, LegalMove, PseudoLegal, SpecialMove, Square, Transients,
+    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
+    LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
     bitboard::{BitBoard, ChessBoard, MetaBoard},
     castling::{CLASSIC_CASTLING, Castling},
     hash::{NoHashes, ZobristTables},
@@ -255,7 +255,7 @@ pub fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
 ) {
     let player = board.ply().0;
 
-    let Some(prom) = ChessPromotion::from_special(mv.special) else {
+    let Some(prom) = PawnPromotion::from_special(mv.special) else {
         return;
     };
     let prom = ChessEchelon::from(prom);

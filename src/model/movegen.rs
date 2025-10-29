@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
     LegalMove, PseudoLegal, SpecialMove, Square,
-    attacking::{AttackMaskStrategy, Attacks},
+    attacking::{AttackMaskGenerator, AttackMaskStrategy, Attacks},
     bitboard::BitBoard,
     castling,
     notation::show_mask,
@@ -11,20 +11,23 @@ use crate::model::{
     vision::{Panopticon, PawnVision, PieceVision, Vision},
 };
 
-pub trait Blesser<'a> {
-    type Blessed;
-    fn new<BB: BitBoard>(board: &'a BB) -> Self;
+pub trait BlessingStrategy {
+    type Blessing;
+    type Blesser<'a, BB: BitBoard + 'a>: MoveBlesser<'a, BB, BlessedMove = Self::Blessing>;
+    fn new<'a, BB: BitBoard>(board: &'a BB) -> Self::Blesser<'a, BB> {
+        Self::Blesser::new(board)
+    }
+}
+
+pub trait MoveBlesser<'a, BB: BitBoard> {
+    type BlessedMove;
+    fn new(board: &'a BB) -> Self;
 
     #[inline]
-    fn bless<BB: BitBoard>(&self, board: &'a BB, mv: BitMove) -> Option<Self::Blessed>;
+    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove>;
 
     #[inline]
-    fn bless_into<BB: BitBoard>(
-        &self,
-        board: &'a BB,
-        mv: BitMove,
-        buffer: &mut Vec<Self::Blessed>,
-    ) {
+    fn bless_into(&self, board: &'a BB, mv: BitMove, buffer: &mut Vec<Self::BlessedMove>) {
         if let Some(b) = self.bless(board, mv) {
             buffer.push(b)
         }
@@ -33,43 +36,59 @@ pub trait Blesser<'a> {
 
 pub struct NoBlessing;
 
-impl<'a> Blesser<'a> for NoBlessing {
-    type Blessed = PseudoLegal;
+#[repr(transparent)]
+pub struct PseudoLegalMoveBlesser<'a, BB: BitBoard>(PhantomData<&'a BB>);
 
-    fn new<BB: BitBoard>(_: &BB) -> Self {
-        NoBlessing
+impl BlessingStrategy for NoBlessing {
+    type Blessing = PseudoLegal;
+    type Blesser<'a, BB: BitBoard + 'a> = PseudoLegalMoveBlesser<'a, BB>;
+}
+
+impl<'a, BB: BitBoard> MoveBlesser<'a, BB> for PseudoLegalMoveBlesser<'a, BB> {
+    type BlessedMove = PseudoLegal;
+
+    fn new(board: &'a BB) -> Self {
+        Self(PhantomData)
     }
 
-    #[inline]
-    fn bless<BB: BitBoard>(&self, board: &BB, mv: BitMove) -> Option<Self::Blessed> {
+    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
         Some(PseudoLegal(mv))
     }
 }
 
-pub struct LegalBlessing<'a, AS: AttackMaskStrategy<'a>, X: Panopticon> {
-    attack_strat: AS,
+pub struct LegalBlessing<AS: AttackMaskStrategy, X: Panopticon>(PhantomData<(AS, X)>);
+
+pub struct LegalMoveBlesser<'a, BB: BitBoard + 'a, AS: AttackMaskStrategy, X: Panopticon> {
+    attack_strat: AS::CachedMasks<'a, BB>,
     cached_attack: u64,
-    _lt: PhantomData<&'a X>,
+    _x: PhantomData<X>,
 }
 
-impl<'a, A: AttackMaskStrategy<'a>, X: Panopticon> Blesser<'a> for LegalBlessing<'a, A, X> {
-    type Blessed = LegalMove;
+impl<AS: AttackMaskStrategy, X: Panopticon> BlessingStrategy for LegalBlessing<AS, X> {
+    type Blessing = LegalMove;
+    type Blesser<'a, BB: BitBoard + 'a> = LegalMoveBlesser<'a, BB, AS, X>;
+}
 
-    fn new<BB: BitBoard>(board: &'a BB) -> Self {
-        let attack_strat = A::new(board);
-        let cached_attack = attack_strat.attacks::<BB, X>(board, board.ply().0).attack;
-        Self {
+impl<'a, BB: BitBoard, AS: AttackMaskStrategy, X: Panopticon> MoveBlesser<'a, BB>
+    for LegalMoveBlesser<'a, BB, AS, X>
+{
+    type BlessedMove = LegalMove;
+
+    fn new(board: &'a BB) -> Self {
+        let attack_strat = AS::new(board);
+        let cached_attack = attack_strat.attacks::<X>(board, board.ply().0).attack;
+        LegalMoveBlesser {
             attack_strat,
             cached_attack,
-            _lt: PhantomData,
+            _x: PhantomData,
         }
     }
 
-    fn bless<BB: BitBoard>(&self, board: &'a BB, mv: BitMove) -> Option<Self::Blessed> {
+    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
         let player = board.ply().0;
         if self
             .attack_strat
-            .attacks_after::<BB, X>(board, player, mv)
+            .attacks_after::<X>(board, player, mv)
             .check()
         {
             return None;
@@ -84,14 +103,13 @@ impl<'a, A: AttackMaskStrategy<'a>, X: Panopticon> Blesser<'a> for LegalBlessing
                 return None;
             }
         }
-
-        return Some(LegalMove(mv));
+        Some(LegalMove(mv))
     }
 }
 
-pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: Blesser<'a>>(
+pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     board: &'a BB,
-    buffer: &mut Vec<L::Blessed>,
+    buffer: &mut Vec<L::Blessing>,
 ) {
     let total = board.total();
     let pan = X::new(total);
@@ -164,12 +182,12 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: Blesser<'a>>(
     castling_move(board, &blesser, total, buffer);
 }
 
-pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: Blesser<'a>>(
+pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
     board: &'a BB,
     blesser: &L,
     pawns: u64,
     pawn_vision: P,
-    buffer: &mut Vec<L::Blessed>,
+    buffer: &mut Vec<L::BlessedMove>,
 ) {
     let eps = EnPassant::bit_sq(board.trans().en_passant);
     let enemy = board.color(board.ply().0.opp()) | eps.0;
@@ -209,11 +227,11 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: Blesser<'a>>(
     }}
 }
 
-fn promotions<'a, BB: BitBoard, L: Blesser<'a>>(
+fn promotions<'a, BB: BitBoard, L: MoveBlesser<'a, BB>>(
     board: &'a BB,
     blesser: &L,
     mut mv: BitMove,
-    buffer: &mut Vec<L::Blessed>,
+    buffer: &mut Vec<L::BlessedMove>,
 ) {
     use SpecialMove::*;
     if mv.to < Square::a1 || Square::h7 < mv.to {
@@ -227,13 +245,13 @@ fn promotions<'a, BB: BitBoard, L: Blesser<'a>>(
     }
 }
 
-fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: Blesser<'a>>(
+fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
     board: &'a BB,
     blesser: &L,
     pieces: u64,
     friendly: u64,
     piece: P,
-    buffer: &mut Vec<L::Blessed>,
+    buffer: &mut Vec<L::BlessedMove>,
 ) {
     biterate! {for from in pieces; {
         biterate! {for to in piece.hits(from, friendly); {
@@ -249,11 +267,11 @@ fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: Blesser<'a>>(
     }}
 }
 
-fn castling_move<'a, BB: BitBoard, L: Blesser<'a>>(
+fn castling_move<'a, BB: BitBoard, L: MoveBlesser<'a, BB>>(
     board: &'a BB,
     blesser: &L,
     total: u64,
-    buffer: &mut Vec<L::Blessed>,
+    buffer: &mut Vec<L::BlessedMove>,
 ) {
     use CastlingDirection::*;
 
