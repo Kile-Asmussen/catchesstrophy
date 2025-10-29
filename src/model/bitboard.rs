@@ -22,10 +22,10 @@
 //! for one another without loss of correctness.
 
 use crate::model::{
-    ChessColor, ChessEchelon, ChessMan, EnPassant, Transients,
+    ChessColor, ChessCommoner, ChessEchelon, ChessMan, EnPassant, Square, Transients,
     castling::{CLASSIC_CASTLING, Castling},
     hash::ZobristTables,
-    utils::bitor_sum,
+    utils::{SliceExtensions, bitor_sum},
 };
 use strum::VariantArray;
 
@@ -40,6 +40,14 @@ pub trait BitBoard: ChessBoard {
 
     /// Retrieve the bitboard representing a given echelon and color of chessman.
     fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64;
+
+    /// Determine if a chessman of some echelon stands on a square
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon>;
+
+    /// Determine if a chessman of some non-king echelon stands on a square
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.ech_at(sq).and_then(ChessCommoner::from_echelon)
+    }
 
     /// Retrieve the bitboard represeting the squares occuipied by all the chessmen of one color.
     fn color(&self, color: ChessColor) -> u64;
@@ -348,6 +356,28 @@ impl BitBoard for CompactBitBoard {
     fn total(&self) -> u64 {
         self.colors[ChessColor::WHITE.ix()] | self.colors[ChessColor::BLACK.ix()]
     }
+
+    /// Very efficiently computed as there are only 6 masks to check
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+        let bit = 1 << sq.ix();
+        for c in ChessEchelon::VARIANTS.clones() {
+            if (self.ech[c.ix()] & bit) != 0 {
+                return Some(c);
+            }
+        }
+        None
+    }
+
+    /// Very efficiently computed as there are only 6 masks to check
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+        let bit = 1 << sq.ix();
+        for c in ChessCommoner::VARIANTS.clones() {
+            if (self.ech[c.ix()] & bit) != 0 {
+                return Some(c);
+            }
+        }
+        None
+    }
 }
 
 impl HasDefaultMetaBoard for CompactBitBoard {
@@ -485,6 +515,32 @@ impl BitBoard for FullBitBoard {
     fn total(&self) -> u64 {
         self.color(ChessColor::WHITE) | self.color(ChessColor::BLACK)
     }
+
+    /// Not so efficiently computed as there are twelve masks to check
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+        let bit = 1 << sq.ix();
+        for c in ChessEchelon::VARIANTS.clones() {
+            if (self.masks[ChessColor::WHITE.ix()][c.ix()] & bit) != 0
+                || (self.masks[ChessColor::BLACK.ix()][c.ix()] & bit) != 0
+            {
+                return Some(c);
+            }
+        }
+        None
+    }
+
+    /// Not so efficiently computed as there are ten masks to check
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+        let bit = 1 << sq.ix();
+        for c in ChessCommoner::VARIANTS.clones() {
+            if (self.masks[ChessColor::WHITE.ix()][c.ix()] & bit) != 0
+                || (self.masks[ChessColor::BLACK.ix()][c.ix()] & bit) != 0
+            {
+                return Some(c);
+            }
+        }
+        None
+    }
 }
 
 impl HasDefaultMetaBoard for FullBitBoard {
@@ -586,6 +642,18 @@ impl BitBoard for FullerBitBoard {
     #[inline]
     fn total(&self) -> u64 {
         bitor_sum(&self.total)
+    }
+
+    /// Delegated
+    #[inline]
+    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+        self.bitboard.ech_at(sq)
+    }
+
+    /// Delegated
+    #[inline]
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.bitboard.comm_at(sq)
     }
 }
 

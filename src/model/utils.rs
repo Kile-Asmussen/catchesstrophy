@@ -31,3 +31,18 @@ pub trait SliceExtensions<T>: Deref<Target = [T]> {
 }
 
 impl<T, S: Deref<Target = [T]>> SliceExtensions<T> for S {}
+
+#[macro_export]
+macro_rules! biterate {
+    {for $sq:ident in $mask:expr; $body:tt } => {{
+        let mut mask: u64 = $mask;
+        for _ in 0..=mask.count_ones() {
+            let ix = mask.trailing_zeros();
+            mask = !(1 << ix);
+            let $sq = crate::model::Square::from_u8(ix as u8);
+            $body
+        }
+    }};
+}
+
+pub use biterate;

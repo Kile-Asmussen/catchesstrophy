@@ -47,9 +47,12 @@ use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 use static_init::Lazy;
 use strum::VariantArray;
 
-use crate::model::{
-    CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, attacks::PieceVision,
-    utils::bitor_sum,
+use crate::{
+    biterate,
+    model::{
+        CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, attacks::PieceVision,
+        utils::bitor_sum,
+    },
 };
 
 /// The rng state used to generate all the random values needed by the tables
@@ -229,25 +232,21 @@ impl CompactZobristTables {
 
     /// Hash a mask of the chessmen of a particular color, regardless of echelons.
     #[inline]
-    fn hash_color_mask(&self, color: ChessColor, mut mask: u64) -> u64 {
+    fn hash_color_mask(&self, color: ChessColor, mask: u64) -> u64 {
         let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            mask ^= 1 << sq;
+        biterate! {for sq in mask; {
             res ^= self.colors[color.ix()][sq as usize & 0x3F];
-        }
+        }}
         res
     }
 
     /// Hash a mask of the chessmen of a given echelon regardless of color.
     #[inline]
-    fn hash_man_mask(&self, man: ChessEchelon, mut mask: u64) -> u64 {
+    fn hash_man_mask(&self, man: ChessEchelon, mask: u64) -> u64 {
         let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            mask ^= 1 << sq;
+        biterate! {for sq in mask; {
             res ^= self.men[man.ix()][sq as usize & 0x3F];
-        }
+        }}
         res
     }
 }
@@ -349,11 +348,9 @@ impl FullZobristTables {
     fn hash_mask(&self, color: ChessColor, man: ChessEchelon, mut mask: u64) -> u64 {
         let mut res = 0;
         let board = self.masks[color.ix()][man.ix()];
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            mask ^= 1 << sq;
-            res ^= board[sq as usize & 0x3F];
-        }
+        biterate! {for sq in mask; {
+            res ^= board[sq.ix()];
+        }}
         res
     }
 }

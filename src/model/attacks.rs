@@ -1,12 +1,15 @@
 use std::marker::PhantomData;
 
-use crate::model::{
-    ChessColor, Square,
-    binary::{
-        bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
-        black_pawn_attack_fill_simdx2, knight_dumbfill_simdx4, queen_diff_obs_simdx4,
-        rook_diff_obs_simdx2, white_pawn_advance_fill, white_pawn_attack_fill,
-        white_pawn_attack_fill_simdx2,
+use crate::{
+    biterate,
+    model::{
+        ChessColor, Square,
+        binary::{
+            bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
+            black_pawn_attack_fill_simdx2, knight_dumbfill_simdx4, queen_diff_obs_simdx4,
+            rook_diff_obs_simdx2, white_pawn_advance_fill, white_pawn_attack_fill,
+            white_pawn_attack_fill_simdx2,
+        },
     },
 };
 
@@ -100,14 +103,11 @@ pub trait Vision: Copy + Clone {
     }
 
     #[inline]
-    fn surveil(self, mut mask: u64) -> u64 {
+    fn surveil(self, mask: u64) -> u64 {
         let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros() as u8;
-            let bit = 1 << sq;
-            mask ^= bit;
-            res |= self.see(unsafe { std::mem::transmute(sq & 0x3F) });
-        }
+        biterate! {for sq in mask; {
+            res |= self.see(sq);
+        }}
         res
     }
 }
@@ -131,14 +131,11 @@ pub trait PawnVision: Vision {
     }
 
     #[inline]
-    fn advance(self, mut mask: u64) -> u64 {
+    fn advance(self, mask: u64) -> u64 {
         let mut res = 0;
-        for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros() as u8;
-            let bit = 1 << sq;
-            mask ^= bit;
-            res |= self.push(unsafe { std::mem::transmute(sq & 0x3F) });
-        }
+        biterate! {for sq in mask; {
+            res |= self.push(sq);
+        }}
         res
     }
 }

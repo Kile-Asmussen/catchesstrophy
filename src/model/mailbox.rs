@@ -13,9 +13,12 @@
 /// the [`bitboard`](`crate::model::bitboard`) module for details.
 use strum::VariantArray;
 
-use crate::model::{
-    ChessColor, ChessEchelon, ChessMan, Square, attacks::ChessMen, bitboard::BitBoard,
-    utils::SliceExtensions,
+use crate::{
+    biterate,
+    model::{
+        ChessColor, ChessEchelon, ChessMan, Square, attacks::ChessMen, bitboard::BitBoard,
+        utils::SliceExtensions,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -36,12 +39,10 @@ impl<T> Mailbox<T> {
     }
 
     /// Assign values to all squares for which a bit is set in the given mask.
-    pub fn set(&mut self, mut mask: u64, mut v: impl FnMut(Square) -> T) {
-        for _ in 0..mask.count_ones() {
-            let ix = mask.trailing_zeros();
-            mask ^= 1 << ix;
-            self.0[ix as usize & 0x3F] = v(Square::from_u8(ix as u8));
-        }
+    pub fn set(&mut self, mask: u64, mut v: impl FnMut(Square) -> T) {
+        biterate! {for sq in mask; {
+            self.0[sq.ix()] = v(sq);
+        }}
     }
 }
 

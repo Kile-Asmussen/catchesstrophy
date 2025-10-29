@@ -285,7 +285,7 @@ impl ChessPiece {
 /// In several instances in this codebase, the exclusion of kings
 /// at a type-level is a convenient guarantee.
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, VariantArray, Hash)]
 #[repr(u8)]
 pub enum ChessCommoner {
     PAWN = 1,
@@ -300,6 +300,15 @@ impl ChessCommoner {
     #[inline]
     pub fn ix(self) -> usize {
         self as usize - 1
+    }
+
+    #[inline]
+    pub fn from_echelon(ech: ChessEchelon) -> Option<Self> {
+        if ech == ChessEchelon::KING {
+            None
+        } else {
+            unsafe { std::mem::transmute(ech as u8) }
+        }
     }
 }
 
@@ -610,4 +619,15 @@ pub struct EnPassant {
     square: Square,
     /// Square of the captured pawn.
     capture: Square,
+}
+
+impl EnPassant {
+    #[inline]
+    pub fn bit_sq(this: Option<Self>) -> (u64, Option<Square>) {
+        if let Some(this) = this {
+            (1 << this.square.ix(), Some(this.square))
+        } else {
+            (0, None)
+        }
+    }
 }
