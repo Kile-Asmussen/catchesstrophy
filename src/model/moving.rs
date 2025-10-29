@@ -6,8 +6,8 @@ use std::{
 use strum::VariantArray;
 
 use crate::model::{
-    BitMove, Castles, ChessMan, ChessPawn, ChessPiece, Color, EnPassant, Legal, Promotion, Special,
-    Square, Transients,
+    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, ChessPromotion,
+    EnPassant, Legal, SpecialMove, Square, Transients,
     bitboard::BitBoard,
     hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},
@@ -95,8 +95,8 @@ trait BitBoardMoveComponents: BitBoard {
 
     fn rook_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
-        piece: ChessMan,
-        color: Color,
+        piece: ChessEchelon,
+        color: ChessColor,
         sq: Square,
         zobristhashes: &'static ZT,
     ) -> u64;
@@ -129,17 +129,17 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
         let bits = (1 << mv.from as u8) | (1 << mv.to as u8);
 
         if MUT {
-            self.xor(player, mv.man, bits);
+            self.xor(player, mv.ech, bits);
         }
 
         let rook_hash =
-            self.rook_special::<{ MUT }, { HASH }, ZT>(mv.man, player, mv.from, zobristhashes);
+            self.rook_special::<{ MUT }, { HASH }, ZT>(mv.ech, player, mv.from, zobristhashes);
         let cap_hash = self.capture::<{ MUT }, { HASH }, ZT>(mv, mv.to, zobristhashes);
 
         if HASH {
             hash ^= cap_hash;
             hash ^= rook_hash;
-            hash ^= zobristhashes.hash_move(player, mv.man, bits);
+            hash ^= zobristhashes.hash_move(player, mv.ech, bits);
         }
 
         if HASH && MUT {
@@ -158,13 +158,13 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
         let mut hash = 0;
         let player = self.ply().0;
 
-        let Some(prom) = Promotion::from_special(mv.special) else {
+        let Some(prom) = ChessPromotion::from_special(mv.special) else {
             return hash;
         };
-        let prom = ChessMan::from(prom);
+        let prom = ChessEchelon::from(prom);
 
         if MUT {
-            self.xor(player, ChessMan::PAWN, 1 << mv.from.ix());
+            self.xor(player, ChessEchelon::PAWN, 1 << mv.from.ix());
             self.xor(player, prom, 1 << mv.to.ix());
         }
 
@@ -172,7 +172,7 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
 
         if HASH {
             hash ^= cap_hash;
-            hash ^= zobristhashes.hash_square(player, ChessMan::PAWN, mv.from);
+            hash ^= zobristhashes.hash_square(player, ChessEchelon::PAWN, mv.from);
             hash ^= zobristhashes.hash_square(player, prom, mv.to);
         }
 
@@ -192,7 +192,7 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
         let mut hash = 0;
         let player = self.ply().0;
 
-        let Some(castle) = Castles::from_special(mv.special) else {
+        let Some(castle) = CastlingDirection::from_special(mv.special) else {
             return hash;
         };
 
@@ -215,8 +215,8 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
 
         if MUT {
             self.trans().halfmove_clock += 1;
-            self.xor(player, ChessMan::KING, king_move);
-            self.xor(player, ChessMan::ROOK, rook_move);
+            self.xor(player, ChessEchelon::KING, king_move);
+            self.xor(player, ChessEchelon::ROOK, rook_move);
             self.trans().rights = rights;
         }
 
@@ -245,7 +245,7 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
 
         if MUT {
             self.trans_mut().en_passant = None;
-            if mv.man == ChessMan::PAWN {
+            if mv.ech == ChessEchelon::PAWN {
                 self.trans_mut().halfmove_clock = 0;
             }
         }
@@ -262,11 +262,11 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
 
         if MUT {
             self.trans_mut().halfmove_clock = 0;
-            self.xor(player, ChessMan::PAWN, bits);
+            self.xor(player, ChessEchelon::PAWN, bits);
         }
 
         if HASH {
-            hash ^= zobristhashes.hash_move(player, ChessMan::PAWN, bits);
+            hash ^= zobristhashes.hash_move(player, ChessEchelon::PAWN, bits);
         }
 
         if let Some(en_passant) = en_passant {
@@ -316,7 +316,7 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
         let Some(man) = mv.capture else {
             return hash;
         };
-        let man = ChessMan::from(man);
+        let man = ChessEchelon::from(man);
 
         if MUT {
             self.trans_mut().halfmove_clock = 0;
@@ -340,18 +340,18 @@ impl<BB: BitBoard> BitBoardMoveComponents for BB {
 
     fn rook_special<const MUT: bool, const HASH: bool, ZT: ZobristTables>(
         &mut self,
-        piece: ChessMan,
-        color: Color,
+        piece: ChessEchelon,
+        color: ChessColor,
         sq: Square,
         zobristhashes: &'static ZT,
     ) -> u64 {
         let mut hash = 0;
 
-        if piece != ChessMan::ROOK {
+        if piece != ChessEchelon::ROOK {
             return hash;
         }
 
-        for dir in [Castles::EAST, Castles::WEST] {
+        for dir in [CastlingDirection::EAST, CastlingDirection::WEST] {
             if sq == self.castling().rook_from[dir.ix()] {
                 let mut rights = self.trans().rights;
 

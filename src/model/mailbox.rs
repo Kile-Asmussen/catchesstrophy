@@ -1,68 +1,57 @@
+/// # The 'mailbox' representaiton of a chessboard.
+///
+/// This is the simple and most obvious representation,
+/// using a separate value in an array for each square, a so-called
+/// 'board'-centric representation.
+///
+/// This module in particular is a generalized version allowing any
+/// values, not just `Option<ChessMan>` to fill the squares.
+///
+/// In this library, the mailbox representation is only used
+/// as a convenient and human-comprehendable way to initialize and
+/// decode the bitboards used for actual computation. See
+/// the [`bitboard`](`crate::model::bitboard`) module for details.
 use strum::VariantArray;
 
-use crate::model::{ChessMan, Color, attacks::ChessMen, bitboard::BitBoard};
+use crate::model::{
+    ChessColor, ChessEchelon, ChessMan, Square, attacks::ChessMen, bitboard::BitBoard,
+    utils::SliceExtensions,
+};
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct Mailbox<T>(pub [T; 64]);
 
-impl<T: Clone + Copy> Mailbox<T> {
-    pub fn mask(&self, mut p: impl FnMut(&T) -> bool) -> u64 {
+impl<T> Mailbox<T> {
+    /// Obtain a bit mask representing which squares the predicate
+    /// returns true for.
+    pub fn mask(&self, mut p: impl FnMut(Square, &T) -> bool) -> u64 {
         let mut res = 0;
-        for i in 0..=63 {
-            if p(&self.0[i]) {
-                res |= 1 << i;
+        for ix in 0..=63 {
+            if p(Square::from_u8(ix as u8), &self.0[ix]) {
+                res |= 1 << ix;
             }
         }
         res
     }
 
-    pub fn set(&mut self, mut mask: u64, mut v: impl FnMut() -> T) {
+    /// Assign values to all squares for which a bit is set in the given mask.
+    pub fn set(&mut self, mut mask: u64, mut v: impl FnMut(Square) -> T) {
         for _ in 0..mask.count_ones() {
-            let sq = mask.trailing_zeros();
-            mask ^= 1 << sq;
-            self.0[sq as usize & 0x3F] = v();
+            let ix = mask.trailing_zeros();
+            mask ^= 1 << ix;
+            self.0[ix as usize & 0x3F] = v(Square::from_u8(ix as u8));
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, VariantArray)]
-#[repr(i8)]
-pub enum ChessSet {
-    BKING = -6,
-    BQUEEN = -5,
-    BROOK = -4,
-    BBISHOP = -3,
-    BKNIGHT = -2,
-    BPAWN = -1,
-    WPAWN = 1,
-    WKNIGHT = 2,
-    WBISHOP = 3,
-    WROOK = 4,
-    WQUEEN = 5,
-    WKING = 6,
-}
-
-impl ChessSet {
-    fn man(self) -> ChessMan {
-        unsafe { std::mem::transmute((self as i8).abs()) }
-    }
-
-    fn color(self) -> Color {
-        if (self as i8) < 0 {
-            Color::BLACK
-        } else {
-            Color::WHITE
-        }
-    }
-}
-
-impl Mailbox<Option<ChessSet>> {
+impl Mailbox<Option<ChessMan>> {
+    /// Set up a mailbox board from a bitboard.
     pub fn from_bitboard<BB: BitBoard>(bb: &BB) -> Self {
         let mut res = Self([None; 64]);
 
-        for cm in ChessSet::VARIANTS {
-            res.set(bb.mask(cm.color(), cm.man()), || Some(*cm));
+        for cm in ChessMan::VARIANTS.clones() {
+            res.set(bb.men(cm.col(), cm.ech()), |_| Some(cm));
         }
 
         res

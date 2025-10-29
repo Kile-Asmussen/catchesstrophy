@@ -1,48 +1,144 @@
+//! # The bitboard representation of the chessboard.
+//!
+//! This is the currently accepted most efficient computational
+//! representation of a chessboard, which is used by many top
+//! chess engines.
+//!
+//! Bitboards function on the observation that there are 64 squares
+//! on a chessboard, and 64 bits in a `u64`. Hence one bit can be used
+//! to represent the absence or presence of some quantity on a chessboard
+//! square.
+//!
+//! Utilizing this observation, we use a separate `u64` for each kind
+//! of chessman. One denoting the positions of all the white pawns, one
+//! denoting the black pawns, and so on.
+//!
+//! This allows very fast lookups of the presence or absence of pieces,
+//! as well as several advanced arithmetic tricks to compute difficult
+//! quantities.
+
 use crate::model::{
-    CLASSIC_CASTLING, Castling, ChessMan, Color, Transients, hash::ZobristTables, utils::bin_sum,
+    ChessColor, ChessEchelon, ChessMan, Transients,
+    castling::{CLASSIC_CASTLING, Castling},
+    hash::ZobristTables,
+    utils::bitor_sum,
 };
 use strum::VariantArray;
 
+/// The basic operations of a bitboard.
 pub trait BitBoard: ChessBoard {
-    fn xor(&mut self, color: Color, man: ChessMan, mask: u64);
+    /// Move a chessman by applying an XOR-operation to the
+    /// bitboard corresponding the chessmen of that echelon and color.
+    /// (The mask usually has only two bits set.)
+    ///
+    /// Notably this operation, because it uses XOR, is an involution.
+    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64);
 
-    fn mask(&self, color: Color, man: ChessMan) -> u64;
+    /// Retrieve the bitboard representing a given echelon and color of chessman.
+    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64;
 
-    fn side(&self, color: Color) -> u64;
+    /// Retrieve the bitboard represeting the squares occuipied by all the chessmen of one color.
+    fn color(&self, color: ChessColor) -> u64;
+
+    /// Retrieve the bitboard representing all occupied squares.
     fn total(&self) -> u64;
 }
 
+/// A proper chessboard.
 pub trait ChessBoard: MetaBoard {
+    /// The classic chess start position.
+    ///
+    /// ```text
+    /// ♜♞♝♛♚♝♞♜
+    /// ♟♟♟♟♟♟♟♟
+    ///
+    /// ♙♙♙♙♙♙♙♙
+    /// ♖♘♗♕♔♗♘♖
+    /// ```
+    ///
+    /// (The above figure only looks correct when viewed as dark text on light background.
+    /// The unicode characters for chessmen do not account for dark mode.)
     fn startpos<ZT: ZobristTables>() -> Self;
 
+    /// Optional sanity checking.
+    ///
+    /// Bitboards, unlike mailboxes, do not have
+    /// an inherent protection against chessmen
+    /// occupying the same squares, and so this
+    /// function exists to allow debugging.
     fn sanity_check<ZT: ZobristTables>(&self);
 
+    /// Recompute the Zobrist hash of this table.
     fn rehash<ZT: ZobristTables>(&self) -> u64;
 }
 
-pub trait MetaBoard: Clone {
-    fn trans_mut(&mut self) -> &mut Transients;
+/// The metadata associated with a chessboard.
+///
+/// Includes:
+///
+/// - Active player color and turn number
+/// - Zobrist hash of the current position (see [`hash`](crate::model::hash))
+/// - The transient game state information
+pub trait MetaBoard {
+    /// The current state of the transient information.
+    ///
+    /// Yes, [`Transients`] includes a field named `rights` 🏳️‍⚧️
+    ///
+    /// I am very funny.
     fn trans(&self) -> Transients;
 
-    fn current_hash(&self) -> u64;
+    /// Mutable access to the transient values.
+    fn trans_mut(&mut self) -> &mut Transients;
+
+    /// Current Zobrist hash of the position.
+    fn curr_hash(&self) -> u64;
+
+    /// Update the Zobrist hash with a given delta hash.
     fn hash(&mut self, hash: u64);
 
-    fn ply(&self) -> (Color, u16);
+    /// Current active player color and turn number.
+    ///
+    /// In game theory, a 'ply' is the technical term for
+    /// a player making a single move. In chess, each turn
+    /// includes both a move from white and a move from black,
+    /// hence a ply in a chess game can be uniquely denoted by
+    /// the turn number and the active player.
+    fn ply(&self) -> (ChessColor, u16);
+
+    /// Increment the ply, i.e. swap active player color and increment
+    /// the turn counter if the swap was black-to-white.
     fn next_ply(&mut self);
+
+    /// Decrement the ply, i.e. swap active player color and decrement
+    /// the turn counter if the swap was white-to-black.
+    ///
+    /// Trying to decrement the ply below the starting value of (1, white)
+    /// is unspecified behavior.
     fn prev_ply(&mut self);
 
+    /// The metadata associated with castling rules for the current
+    /// game.
+    ///
+    /// The chess variants Chess960 and Chess480 have different castling
+    /// rules, and so castling rules are specified in data, rather than
+    /// hard-coded.
     fn castling(&self) -> &'static Castling;
 }
 
+/// Default implementation of the [`MetaBoard`] trait, used for
+/// inclusion-as-inheritance in the bitboard implementations.
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultMetaBoard {
     pub castling: &'static Castling,
     pub hash: u64,
     pub turn: u16,
-    pub player: Color,
+    pub player: ChessColor,
     pub trans: Transients,
 }
 
+/// Equality comparison that ignores the turn counter and the
+/// [`Transients.halfmove_clock`](crate::model::Transients#structfield.halfmove_clock),
+/// for the purposes of comparing the equivalence of board positions atemporally.
 impl PartialEq for DefaultMetaBoard {
     fn eq(&self, other: &Self) -> bool {
         self.player == other.player
@@ -68,28 +164,28 @@ impl MetaBoard for DefaultMetaBoard {
     }
 
     #[inline]
-    fn ply(&self) -> (Color, u16) {
+    fn ply(&self) -> (ChessColor, u16) {
         (self.player, self.turn)
     }
 
     #[inline]
     fn next_ply(&mut self) {
         self.player = self.player.opp();
-        if self.player == Color::WHITE {
+        if self.player == ChessColor::WHITE {
             self.turn += 1;
         }
     }
 
     #[inline]
     fn prev_ply(&mut self) {
-        if self.player == Color::WHITE {
+        if self.player == ChessColor::WHITE {
             self.turn -= 1;
         }
         self.player = self.player.opp();
     }
 
     #[inline]
-    fn current_hash(&self) -> u64 {
+    fn curr_hash(&self) -> u64 {
         self.hash
     }
 
@@ -100,11 +196,15 @@ impl MetaBoard for DefaultMetaBoard {
 }
 
 impl ChessBoard for DefaultMetaBoard {
+    /// Starting position sans the actual chessmen.
+    ///
+    /// White to move on turn 1, castling allowed
+    /// in both directtions for both players.
     fn startpos<ZT: ZobristTables>() -> Self {
         let mut res = Self {
             castling: &CLASSIC_CASTLING,
             hash: 0,
-            player: Color::WHITE,
+            player: ChessColor::WHITE,
             turn: 1,
             trans: Transients {
                 en_passant: None,
@@ -116,27 +216,23 @@ impl ChessBoard for DefaultMetaBoard {
         res
     }
 
-    #[inline]
-    #[cfg(test)]
+    /// Performs the following checks:
+    ///
+    /// - The procedurally computed hash is equal to the recomputed hash.
     fn sanity_check<ZT: ZobristTables>(&self) {
-        assert_eq!(self.current_hash(), self.rehash::<ZT>());
+        assert_eq!(self.curr_hash(), self.rehash::<ZT>());
     }
-
-    #[cfg(not(test))]
-    #[inline]
-    fn sanity_check<ZT: ZobristTables>(&self) {}
 
     #[inline]
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
-        let mut res = 0;
         let zobristtable = ZT::static_table();
-        res ^= zobristtable.black();
-        res ^= zobristtable.hash_rights(self.trans.rights);
-        res ^= zobristtable.hash_en_passant(self.trans.en_passant);
-        res
+        zobristtable.black()
+            ^ zobristtable.hash_rights(self.trans.rights)
+            ^ zobristtable.hash_en_passant(self.trans.en_passant)
     }
 }
 
+/// Delegation trait, allowing default implementation of [`MetaBoard`]
 pub trait HasDefaultMetaBoard {
     fn metaboard(&self) -> &DefaultMetaBoard;
     fn metaboard_mut(&mut self) -> &mut DefaultMetaBoard;
@@ -154,8 +250,8 @@ impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     }
 
     #[inline]
-    fn current_hash(&self) -> u64 {
-        self.metaboard().current_hash()
+    fn curr_hash(&self) -> u64 {
+        self.metaboard().curr_hash()
     }
 
     #[inline]
@@ -164,7 +260,7 @@ impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     }
 
     #[inline]
-    fn ply(&self) -> (Color, u16) {
+    fn ply(&self) -> (ChessColor, u16) {
         self.metaboard().ply()
     }
 
@@ -184,30 +280,43 @@ impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     }
 }
 
+/// The compact bitboard representation.
+///
+/// This representation uses a total of 8 `u64` values to represent
+/// the state of the board, one for each color, and one for each echelon.
+///
+/// The particular bitboard representing a given type of chessmen is
+/// then obtained as the binary AND of the color mask and the echelon mask.
+///
+/// Care must be taken when updating to move both the piece and the color.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CompactBitBoard {
-    pub men: [u64; 6],
+    pub ech: [u64; 6],
     pub colors: [u64; 2],
     pub meta: DefaultMetaBoard,
 }
 
 impl BitBoard for CompactBitBoard {
+    /// Updates both the echelon mask and the color mask separately.
     #[inline]
-    fn xor(&mut self, color: Color, man: ChessMan, mask: u64) {
-        self.men[man.ix()] ^= mask;
+    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+        self.ech[ech.ix()] ^= mask;
         self.colors[color.ix()] ^= mask;
     }
 
-    fn mask(&self, color: Color, man: ChessMan) -> u64 {
-        self.men[man.ix()] & self.colors[color.ix()]
+    /// Computed with a binary OR operation
+    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+        self.ech[ech.ix()] & self.colors[color.ix()]
     }
 
-    fn side(&self, color: Color) -> u64 {
+    /// Very efficiently directly on hand in this implementation
+    fn color(&self, color: ChessColor) -> u64 {
         self.colors[color.ix()]
     }
 
+    /// Very efficiently computed in a single binary OR operation
     fn total(&self) -> u64 {
-        self.colors[Color::WHITE.ix()] | self.colors[Color::BLACK.ix()]
+        self.colors[ChessColor::WHITE.ix()] | self.colors[ChessColor::BLACK.ix()]
     }
 }
 
@@ -226,7 +335,7 @@ impl HasDefaultMetaBoard for CompactBitBoard {
 impl ChessBoard for CompactBitBoard {
     fn startpos<ZT: ZobristTables>() -> Self {
         let mut res = Self {
-            men: [
+            ech: [
                 0x00FF_0000_0000_FF00,
                 0x4200_0000_0000_0042,
                 0x2400_0000_0000_0024,
@@ -242,20 +351,25 @@ impl ChessBoard for CompactBitBoard {
     }
 
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
-        self.metaboard().rehash::<ZT>() ^ ZT::static_table().hash_compact(&self.colors, &self.men)
+        self.metaboard().rehash::<ZT>() ^ ZT::static_table().hash_compact(&self.colors, &self.ech)
     }
 
-    #[cfg(test)]
+    /// Performs the following checks:
+    ///
+    /// - Are the echelon masks non-overlapping?
+    /// - Are the color masks non-overlapping?
+    /// - Are the sum of the echelon masks equal to the sum of the color masks?
+    /// - Is the procedurally updated hash equal to the recomputed hash?
     fn sanity_check<ZT: ZobristTables>(&self) {
-        for p1 in ChessMan::VARIANTS {
-            for p2 in ChessMan::VARIANTS {
+        for p1 in ChessEchelon::VARIANTS {
+            for p2 in ChessEchelon::VARIANTS {
                 let (p1, p2) = (*p1, *p2);
                 if p1 >= p2 {
                     continue;
                 }
 
                 assert_eq!(
-                    self.men[p1.ix()] & self.men[p2.ix()],
+                    self.ech[p1.ix()] & self.ech[p2.ix()],
                     0,
                     "{:?} and {:?} overlap",
                     p1,
@@ -265,7 +379,7 @@ impl ChessBoard for CompactBitBoard {
         }
 
         assert_eq!(
-            self.colors[Color::WHITE.ix()] | self.colors[Color::BLACK.ix()],
+            self.colors[ChessColor::WHITE.ix()] | self.colors[ChessColor::BLACK.ix()],
             0,
             "white and black overlap",
         );
@@ -274,43 +388,43 @@ impl ChessBoard for CompactBitBoard {
         let mut black = 0;
         let mut total = 0;
 
-        for p in &self.men {
+        for p in &self.ech {
             let p = *p;
-            white |= self.colors[Color::WHITE.ix()] & p;
-            black |= self.colors[Color::BLACK.ix()] & p;
+            white |= self.colors[ChessColor::WHITE.ix()] & p;
+            black |= self.colors[ChessColor::BLACK.ix()] & p;
             total |= p;
         }
 
         assert_eq!(
             white,
-            self.colors[Color::WHITE.ix()],
+            self.colors[ChessColor::WHITE.ix()],
             "sum of white-masked pieces not equal to white"
         );
 
         assert_eq!(
             black,
-            self.colors[Color::BLACK as usize],
-            "disjunction of black-masked pieces not equal to black"
+            self.colors[ChessColor::BLACK as usize],
+            "sum of black-masked pieces not equal to black"
         );
 
         assert_eq!(
             total,
             white | black,
-            "disjunction of pieces not equal to disjunction of colors"
+            "sum of pieces not equal to disjunction of colors"
         );
 
         assert_eq!(
-            self.current_hash(),
+            self.curr_hash(),
             self.rehash::<ZT>(),
             "procedural hash mismatch"
         );
     }
-
-    #[inline]
-    #[cfg(not(test))]
-    fn sanity_check<ZT: ZobristTables>(&self) {}
 }
 
+/// The naive bitboard representation.
+///
+/// This representation uses a total of 12 `u64` values to represent
+/// the state of the board, one for each kind of chessman.
 #[derive(Debug, Clone)]
 pub struct FullBitBoard {
     masks: [[u64; 6]; 2],
@@ -318,24 +432,28 @@ pub struct FullBitBoard {
 }
 
 impl BitBoard for FullBitBoard {
+    /// Computed in a single XOR operation.
     #[inline]
-    fn xor(&mut self, color: Color, man: ChessMan, mask: u64) {
-        self.masks[color.ix()][man.ix()] ^= mask;
+    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+        self.masks[color.ix()][ech.ix()] ^= mask;
     }
 
+    /// Directly on hand.
     #[inline]
-    fn mask(&self, color: Color, man: ChessMan) -> u64 {
-        self.masks[color.ix()][man.ix()]
+    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+        self.masks[color.ix()][ech.ix()]
     }
 
+    /// Computed as the sum of all the chessmen masks of one color.
     #[inline]
-    fn side(&self, color: Color) -> u64 {
-        bin_sum(&self.masks[color.ix()])
+    fn color(&self, color: ChessColor) -> u64 {
+        bitor_sum(&self.masks[color.ix()])
     }
 
+    /// Sum of all bitboards in this representation.
     #[inline]
     fn total(&self) -> u64 {
-        self.side(Color::WHITE) | self.side(Color::BLACK)
+        self.color(ChessColor::WHITE) | self.color(ChessColor::BLACK)
     }
 }
 
@@ -363,12 +481,15 @@ impl ChessBoard for FullBitBoard {
         res
     }
 
-    #[cfg(test)]
+    /// Performs the following checks:
+    ///
+    /// - All the bit masks are non-overlapping
+    /// - The procedurally computed hash is equal to the recomputed hash
     fn sanity_check<ZT: ZobristTables>(&self) {
-        for p1 in ChessMan::VARIANTS {
-            for p2 in ChessMan::VARIANTS {
-                for c1 in [Color::WHITE, Color::BLACK] {
-                    for c2 in [Color::WHITE, Color::BLACK] {
+        for p1 in ChessEchelon::VARIANTS {
+            for p2 in ChessEchelon::VARIANTS {
+                for c1 in [ChessColor::WHITE, ChessColor::BLACK] {
+                    for c2 in [ChessColor::WHITE, ChessColor::BLACK] {
                         let (p1, p2) = (*p1, *p2);
                         if (p1, c1) >= (p2, c2) {
                             continue;
@@ -388,15 +509,11 @@ impl ChessBoard for FullBitBoard {
             }
         }
 
-        assert_eq!(self.metaboard().current_hash(), self.rehash::<ZT>());
+        assert_eq!(self.metaboard().curr_hash(), self.rehash::<ZT>());
     }
 
-    #[inline]
-    #[cfg(not(test))]
-    fn sanity_check<ZT: ZobristTables>(&self) {}
-
     fn rehash<ZT: ZobristTables>(&self) -> u64 {
-        self.metaboard().rehash::<ZT>() ^ ZT::static_table().hash_full(&self.masks)
+        self.metaboard().rehash::<ZT>() ^ ZT::static_table().hash_full_bitboard(&self.masks)
     }
 }
 
@@ -408,24 +525,24 @@ pub struct FullerBitBoard {
 
 impl BitBoard for FullerBitBoard {
     #[inline]
-    fn xor(&mut self, color: Color, man: ChessMan, mask: u64) {
-        self.bitboard.xor(color, man, mask);
+    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+        self.bitboard.xor(color, ech, mask);
         self.total[color.ix()] ^= mask;
     }
 
     #[inline]
-    fn mask(&self, color: Color, man: ChessMan) -> u64 {
-        self.bitboard.mask(color, man)
+    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+        self.bitboard.men(color, ech)
     }
 
     #[inline]
-    fn side(&self, color: Color) -> u64 {
+    fn color(&self, color: ChessColor) -> u64 {
         self.total[color.ix()]
     }
 
     #[inline]
     fn total(&self) -> u64 {
-        bin_sum(&self.total)
+        bitor_sum(&self.total)
     }
 }
 
@@ -449,24 +566,19 @@ impl ChessBoard for FullerBitBoard {
         }
     }
 
-    #[cfg(test)]
     fn sanity_check<ZT: ZobristTables>(&self) {
         self.bitboard.sanity_check::<ZT>();
         assert_eq!(
-            self.total[Color::WHITE.ix()],
-            self.bitboard.side(Color::WHITE),
+            self.total[ChessColor::WHITE.ix()],
+            self.bitboard.color(ChessColor::WHITE),
             "white total is not sum of white pieces"
         );
         assert_eq!(
-            self.total[Color::BLACK.ix()],
-            self.bitboard.side(Color::BLACK),
+            self.total[ChessColor::BLACK.ix()],
+            self.bitboard.color(ChessColor::BLACK),
             "black total is not sum of black pieces"
         )
     }
-
-    #[inline]
-    #[cfg(not(test))]
-    fn sanity_check<ZT: ZobristTables>(&self) {}
 
     #[inline]
     fn rehash<ZT: ZobristTables>(&self) -> u64 {

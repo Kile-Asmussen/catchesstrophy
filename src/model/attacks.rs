@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::model::{
-    Color, Square,
+    ChessColor, Square,
     binary::{
         bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
         black_pawn_attack_fill_simdx2, knight_dumbfill_simdx4, queen_diff_obs_simdx4,

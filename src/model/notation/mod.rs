@@ -3,8 +3,10 @@ use std::fmt::{Display, write};
 use strum::EnumIs;
 
 use crate::model::{
-    BitMove, CLASSIC_CASTLING, Castles, Castling, ChessMan, ChessPawn, ChessPiece, Color,
-    EnPassant, Promotion, Special, Square, Transients, VariantNames,
+    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessMan, ChessPawn, ChessPiece,
+    ChessPromotion, EnPassant, SpecialMove, Square, Transients, VariantNames,
+    castling::Castling,
+    utils::{IteratorExtensions, SliceExtensions},
 };
 
 impl Square {
@@ -15,7 +17,7 @@ impl Square {
 
     #[inline]
     pub fn rank(self) -> u8 {
-        (self as u8 & 0x38) >> 3
+        1 + ((self as u8 & 0x38) >> 3)
     }
 }
 
@@ -25,7 +27,28 @@ impl Display for Square {
     }
 }
 
+#[test]
+fn square_file_rank() {
+    for (i, sq1) in Square::VARIANTS.clones().enumerate() {
+        let sq2 = Square::from_u8(i as u8);
+        let sq2 = format!("{}{}", sq2.file(), sq2.rank());
+        assert_eq!(sq1, &sq2);
+    }
+}
+
 impl Display for ChessMan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let arr = match (self.col(), f.alternate()) {
+            (ChessColor::WHITE, true) => ["♙", "♘", "♗", "♖", "♕", "♔"],
+            (ChessColor::WHITE, false) => ["♟", "♞", "♝", "♜", "♛", "♚"],
+            (ChessColor::BLACK, true) => ["p", "n", "b", "r", "q", "k"],
+            (ChessColor::BLACK, false) => ["P", "N", "B", "R", "Q", "K"],
+        };
+        write!(f, "{}", arr[self.ech().ix()])
+    }
+}
+
+impl Display for ChessEchelon {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let arr = if f.alternate() {
             ["p", "n", "b", "r", "q", "k"]
@@ -38,30 +61,44 @@ impl Display for ChessMan {
 
 impl Display for ChessPawn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <ChessMan as Display>::fmt(&ChessMan::from(*self), f)
+        <ChessEchelon as Display>::fmt(&ChessEchelon::from(*self), f)
     }
 }
 
-impl Display for Color {
+impl Display for ChessColor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match *self {
-            Self::WHITE => write!(f, "w"),
-            Self::BLACK => write!(f, "b"),
+        if f.alternate() {
+            match *self {
+                Self::WHITE => write!(f, "w"),
+                Self::BLACK => write!(f, "b"),
+            }
+        } else {
+            match *self {
+                Self::WHITE => write!(f, "white"),
+                Self::BLACK => write!(f, "black"),
+            }
         }
     }
 }
 
-impl Display for Promotion {
+impl Display for ChessPromotion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#}", ChessMan::from(*self))
+        write!(f, "{:#}", ChessEchelon::from(*self))
     }
 }
 
-impl Display for Castles {
+impl Display for CastlingDirection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EAST => write!(f, "O-O"),
-            Self::WEST => write!(f, "O-O-O"),
+        if f.alternate() {
+            match self {
+                Self::EAST => write!(f, "0-0-0"),
+                Self::WEST => write!(f, "0-0"),
+            }
+        } else {
+            match self {
+                Self::EAST => write!(f, "O-O-O"),
+                Self::WEST => write!(f, "O-O"),
+            }
         }
     }
 }
@@ -82,8 +119,8 @@ impl Display for Rights {
             [['Q', 'K'], ['q', 'k']]
         };
 
-        for c in [Color::WHITE, Color::BLACK] {
-            for d in [Castles::WEST, Castles::EAST] {
+        for c in [ChessColor::WHITE, ChessColor::BLACK] {
+            for d in [CastlingDirection::WEST, CastlingDirection::EAST] {
                 write!(f, "{}", letters[c.ix()][d.ix()])?;
             }
         }
@@ -127,7 +164,7 @@ impl Display for TransientInfo {
 pub struct CoordNotation {
     pub from: Square,
     pub to: Square,
-    pub prom: Option<Promotion>,
+    pub prom: Option<ChessPromotion>,
 }
 
 impl Display for CoordNotation {
@@ -144,15 +181,15 @@ impl Display for CoordNotation {
 pub enum AlgNotaion {
     Pawn(AlgPawn, AlgCheck),
     Piece(AlgPiece, AlgCheck),
-    Caslte(Castles, AlgCheck),
+    Caslte(CastlingDirection, AlgCheck),
 }
 
 impl Display for AlgNotaion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Pawn(p, c) => write!(f, "{}{}", p, c),
-            Self::Piece(p, c) => write!(f, "{}{}", p, c),
-            Self::Caslte(p, c) => write!(f, "{}{}", p, c),
+            Self::Pawn(p, x) => write!(f, "{}{}", p, x),
+            Self::Piece(p, x) => write!(f, "{}{}", p, x),
+            Self::Caslte(p, x) => write!(f, "{}{}", p, x),
         }
     }
 }
@@ -162,7 +199,7 @@ pub struct AlgPawn {
     pub from: Square,
     pub to: Square,
     pub capture: bool,
-    pub promote: Option<Promotion>,
+    pub promote: Option<ChessPromotion>,
 }
 
 impl Display for AlgPawn {
@@ -192,7 +229,7 @@ impl Display for AlgPawn {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AlgPiece {
-    pub piece: ChessPiece,
+    pub piece: ChessMan,
     pub from: Square,
     pub to: Square,
     pub capture: bool,
@@ -205,13 +242,13 @@ impl Display for AlgPiece {
             write!(
                 f,
                 "{}{}{}{}",
-                ChessMan::from(self.piece),
+                ChessEchelon::from(self.piece),
                 self.from,
                 if self.capture { "x" } else { "" },
                 self.to
             )?;
         } else {
-            write!(f, "{}", ChessMan::from(self.piece))?;
+            write!(f, "{}", ChessEchelon::from(self.piece))?;
             if self.disambiguate.0 {
                 write!(f, "{}", self.from.file())?;
             }
@@ -272,7 +309,7 @@ impl MoveMatcher for CoordNotation {
     fn matches(self, mv: BitMove) -> bool {
         self.from == mv.from
             && self.to == mv.to
-            && (self.prom.is_none() || self.prom == Promotion::from_special(mv.special))
+            && (self.prom.is_none() || self.prom == ChessPromotion::from_special(mv.special))
     }
 }
 
@@ -280,14 +317,14 @@ impl MoveMatcher for AlgNotaion {
     fn matches(self, mv: BitMove) -> bool {
         match self {
             Self::Pawn(p, _) => {
-                mv.man == ChessMan::PAWN
+                mv.ech == ChessEchelon::PAWN
                     && (p.from as u8 & 0x7) == (mv.from as u8 & 0x7)
                     && p.to == mv.to
                     && p.capture == mv.capture.is_some()
-                    && p.promote == Promotion::from_special(mv.special)
+                    && p.promote == ChessPromotion::from_special(mv.special)
             }
             Self::Piece(p, _) => {
-                mv.man == ChessMan::from(p.piece)
+                mv.ech == ChessEchelon::from(p.piece)
                     && mv.to == p.to
                     && p.capture == mv.capture.is_some()
                     && match p.disambiguate {
@@ -297,7 +334,7 @@ impl MoveMatcher for AlgNotaion {
                         (true, true) => p.from == mv.from,
                     }
             }
-            Self::Caslte(c, _) => mv.special == Some(Special::from(c)),
+            Self::Caslte(c, _) => mv.special == Some(SpecialMove::from(c)),
         }
     }
 }

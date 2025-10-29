@@ -1,5 +1,5 @@
 use crate::model::{
-    BitMove, ChessMan, Color, Legal, PseudoLegal,
+    BitMove, ChessEchelon, ChessColor, Legal, PseudoLegal,
     attacks::{Panopticon, Vision},
 };
 
