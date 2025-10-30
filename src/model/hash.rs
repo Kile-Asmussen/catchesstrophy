@@ -40,7 +40,11 @@
 //! The random values used in this library are generated using [`rand::rngs::SmallRng`]
 //! seeded with a set seed of the first 32 bytes of the ASCII representation of π.
 
-use std::{hash::Hasher, ops::BitXor, sync::LazyLock};
+use std::{
+    hash::{BuildHasher, Hasher},
+    ops::BitXor,
+    sync::LazyLock,
+};
 
 use chrono::format::Colons;
 use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
@@ -355,9 +359,11 @@ impl FullZobristTables {
     }
 }
 
+static FULL_ZOBRIST: LazyLock<FullZobristTables> = LazyLock::new(FullZobristTables::new);
+
 impl ZobristTables for FullZobristTables {
     fn static_table() -> &'static Self {
-        todo!()
+        &FULL_ZOBRIST
     }
 
     #[inline]
@@ -464,5 +470,13 @@ impl Hasher for ZobHasher {
 
     fn write_u64(&mut self, i: u64) {
         self.0 ^= i;
+    }
+}
+
+impl BuildHasher for ZobHasher {
+    type Hasher = ZobHasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        ZobHasher(0)
     }
 }

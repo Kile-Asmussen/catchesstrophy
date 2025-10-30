@@ -5,23 +5,24 @@
 use crate::model::{
     ChessMan, PseudoLegal, Square,
     attacking::FakeMoveEcharrayStrategy,
-    bitboard::{BitBoard, ChessBoard, CompactBitBoard},
-    hash::CompactZobristTables,
+    bitboard::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
+    hash::{CompactZobristTables, FullZobristTables},
     mailbox::Mailbox,
     movegen::{BlessingStrategy, LegalBlessing, NoBlessing, enumerate},
-    perft::{CloneMake, perft},
+    perft::{CloneMake, HashMapMemo, MakeUnmake, perft},
     vision::{MostlyBits, Panopticon},
 };
 
 #[test]
 fn main_perft() {
+    println!("Fuller");
     perft::<
-        CompactBitBoard,
+        FullerBitBoard,
         MostlyBits,
         LegalBlessing<FakeMoveEcharrayStrategy, MostlyBits>,
         CloneMake,
-        CompactZobristTables,
-    >(5)
+        FullZobristTables,
+    >(1, false, ())
     .pretty_print();
 }
 

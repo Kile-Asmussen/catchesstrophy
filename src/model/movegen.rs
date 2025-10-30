@@ -117,6 +117,8 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     let player = board.ply().0;
     let friendly = board.color(player);
 
+    buffer.clear();
+
     match board.ply().0 {
         ChessColor::WHITE => pawn_moves(
             board,
