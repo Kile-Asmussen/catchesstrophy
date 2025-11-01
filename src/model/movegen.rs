@@ -47,50 +47,46 @@ impl BlessingStrategy for NoBlessing {
 impl<'a, BB: BitBoard> MoveBlesser<'a, BB> for PseudoLegalMoveBlesser<'a, BB> {
     type BlessedMove = PseudoLegal;
 
+    #[inline]
     fn new(board: &'a BB) -> Self {
         Self(PhantomData)
     }
 
+    #[inline]
     fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
         Some(PseudoLegal(mv))
     }
 }
 
-pub struct LegalBlessing<AS: AttackMaskStrategy, X: Panopticon>(PhantomData<(AS, X)>);
+pub struct LegalBlessing<AS: AttackMaskStrategy>(PhantomData<AS>);
 
-pub struct LegalMoveBlesser<'a, BB: BitBoard + 'a, AS: AttackMaskStrategy, X: Panopticon> {
-    attack_strat: AS::CachedMasks<'a, BB>,
+pub struct LegalMoveBlesser<'a, BB: BitBoard + 'a, AS: AttackMaskStrategy> {
+    attack_strat: AS::CachedData<'a, BB>,
     cached_attack: u64,
-    _x: PhantomData<X>,
 }
 
-impl<AS: AttackMaskStrategy, X: Panopticon> BlessingStrategy for LegalBlessing<AS, X> {
+impl<AS: AttackMaskStrategy> BlessingStrategy for LegalBlessing<AS> {
     type Blessing = LegalMove;
-    type Blesser<'a, BB: BitBoard + 'a> = LegalMoveBlesser<'a, BB, AS, X>;
+    type Blesser<'a, BB: BitBoard + 'a> = LegalMoveBlesser<'a, BB, AS>;
 }
 
-impl<'a, BB: BitBoard, AS: AttackMaskStrategy, X: Panopticon> MoveBlesser<'a, BB>
-    for LegalMoveBlesser<'a, BB, AS, X>
+impl<'a, BB: BitBoard, AS: AttackMaskStrategy> MoveBlesser<'a, BB>
+    for LegalMoveBlesser<'a, BB, AS>
 {
     type BlessedMove = LegalMove;
 
     fn new(board: &'a BB) -> Self {
         let attack_strat = AS::new(board);
-        let cached_attack = attack_strat.attacks::<X>(board, board.ply().0).attack;
+        let cached_attack = attack_strat.attacks(board, board.ply().0).attack;
         LegalMoveBlesser {
             attack_strat,
             cached_attack,
-            _x: PhantomData,
         }
     }
 
     fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
         let player = board.ply().0;
-        if self
-            .attack_strat
-            .attacks_after::<X>(board, player, mv)
-            .check()
-        {
+        if self.attack_strat.attacks_after(board, player, mv).check() {
             return None;
         } else if let Some(ix) = CastlingDirection::from_special(mv.special) {
             let castling = board.castling();

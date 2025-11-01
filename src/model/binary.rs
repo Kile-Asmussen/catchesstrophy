@@ -199,30 +199,99 @@ fn knight_fill() {
 #[inline]
 pub fn rook_dumb7fill_simdx2(rooks: u64, empty: u64) -> u64 {
     const SHIFT: u64x2 = u64x2::from_array([1, 8]);
+
     const WRAP_SHL: u64x2 = u64x2::from_array([!0x0101_0101_0101_0101, !0]);
-    const WRAP_SHR: u64x2 = u64x2::from_array([!0x8080_8080_8080_8080, !0]);
-
     let empty_shl = u64x2::splat(empty) & WRAP_SHL;
-    let empty_shr = u64x2::splat(empty) & WRAP_SHR;
-
     let mut rooks_shl = u64x2::splat(rooks);
-    let mut rooks_shr = u64x2::splat(rooks);
     let mut flood_shl = u64x2::splat(0);
-    let mut flood_shr = u64x2::splat(0);
-
     for _ in 0..5 {
         rooks_shl = rooks_shl << SHIFT & empty_shl;
         flood_shl |= rooks_shl;
+    }
+    flood_shl |= rooks_shl << SHIFT & empty_shl;
+    flood_shl = flood_shl << SHIFT & WRAP_SHL;
 
+    const WRAP_SHR: u64x2 = u64x2::from_array([!0x8080_8080_8080_8080, !0]);
+    let empty_shr = u64x2::splat(empty) & WRAP_SHR;
+    let mut rooks_shr = u64x2::splat(rooks);
+    let mut flood_shr = u64x2::splat(0);
+    for _ in 0..5 {
         rooks_shr = rooks_shr >> SHIFT & empty_shr;
         flood_shr |= rooks_shr;
     }
-
-    flood_shl |= rooks_shl << SHIFT & empty_shl;
     flood_shr |= rooks_shr >> SHIFT & empty_shr;
+    flood_shr = flood_shr >> SHIFT & WRAP_SHR;
 
+    return (flood_shl | flood_shr).reduce_or();
+}
+
+/// The dumb7fill algorithm for bishops.
+#[inline]
+pub fn bishop_dumb7fill_simdx2(bishops: u64, empty: u64) -> u64 {
+    const SHIFT: u64x2 = u64x2::from_array([7, 9]);
+    const WRAP: u64x2 = u64x2::from_array([!0x8080_8080_8080_8080, !0x0101_0101_0101_0101]);
+
+    let empty_shl = u64x2::splat(empty) & WRAP;
+    let mut rooks_shl = u64x2::splat(bishops);
+    let mut flood_shl = u64x2::splat(0);
+    for _ in 0..5 {
+        rooks_shl = rooks_shl << SHIFT & empty_shl;
+        flood_shl |= rooks_shl;
+    }
+    flood_shl |= rooks_shl << SHIFT & empty_shl;
+    flood_shl = flood_shl << SHIFT & WRAP;
+
+    let empty_shr = u64x2::splat(empty) & WRAP.reverse();
+    let mut rooks_shr = u64x2::splat(bishops);
+    let mut flood_shr = u64x2::splat(0);
+    for _ in 0..5 {
+        rooks_shr = rooks_shr >> SHIFT & empty_shr;
+        flood_shr |= rooks_shr;
+    }
+    flood_shr |= rooks_shr >> SHIFT & empty_shr;
+    flood_shr = flood_shr >> SHIFT & WRAP.reverse();
+
+    return (flood_shl | flood_shr).reduce_or();
+}
+
+/// The dumb7fill algorithm for queens (and optionally bishops and rooks).
+#[inline]
+pub fn queen_dumb7fill_simdx2(queens: u64, rooks: u64, bishops: u64, empty: u64) -> u64 {
+    const SHIFT: u64x4 = u64x4::from_array([8, 7, 9, 1]);
+    const WRAP_SHL: u64x4 = u64x4::from_array([
+        !0,
+        !0x8080_8080_8080_8080,
+        !0x0101_0101_0101_0101,
+        !0x0101_0101_0101_0101,
+    ]);
+    const WRAP_SHR: u64x4 = u64x4::from_array([
+        !0,
+        !0x8080_8080_8080_8080,
+        !0x0101_0101_0101_0101,
+        !0x0101_0101_0101_0101,
+    ]);
+
+    let empty_shl = u64x4::splat(empty) & WRAP_SHL;
+    let mut queens_shl =
+        u64x4::from_array([rooks | queens, bishops | queens, bishops | queens, rooks | queens]);
+    let mut flood_shl = u64x4::splat(0);
+    for _ in 0..5 {
+        queens_shl = queens_shl << SHIFT & empty_shl;
+        flood_shl |= queens_shl;
+    }
+    flood_shl |= queens_shl << SHIFT & empty_shl;
     flood_shl = flood_shl << SHIFT & WRAP_SHL;
-    flood_shr = flood_shr << SHIFT & WRAP_SHL;
+
+    let empty_shr = u64x4::splat(empty) & WRAP_SHR;
+    let mut queens_shr =
+        u64x4::from_array([rooks | queens, bishops | queens, bishops | queens, rooks | queens]);
+    let mut flood_shr = u64x4::splat(0);
+    for _ in 0..5 {
+        queens_shr = queens_shr >> SHIFT & empty_shr;
+        flood_shr |= queens_shr;
+    }
+    flood_shr |= queens_shr >> SHIFT & empty_shr;
+    flood_shr = flood_shr >> SHIFT & WRAP_SHR;
 
     return (flood_shl | flood_shr).reduce_or();
 }

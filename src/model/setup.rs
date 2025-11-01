@@ -1,4 +1,4 @@
-/// # The 'mailbox' representaiton of a chessboard.
+/// # The 64-entry-array representaiton of a chessboard.
 ///
 /// This is the simple and most obvious representation,
 /// using a separate value in an array for each square, a so-called
@@ -23,9 +23,9 @@ use crate::{
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]
-pub struct Mailbox<T>(pub [T; 64]);
+pub struct SimpleBoard<T>(pub [T; 64]);
 
-impl<T> Mailbox<T> {
+impl<T> SimpleBoard<T> {
     /// Obtain a bit mask representing which squares the predicate
     /// returns true for.
     pub fn mask(&self, mut p: impl FnMut(Square, &T) -> bool) -> u64 {
@@ -38,6 +38,7 @@ impl<T> Mailbox<T> {
         res
     }
 
+    /// Write to a square
     pub fn set(&mut self, sq: Square, it: T) {
         self.0[sq.ix()] = it
     }
@@ -50,7 +51,7 @@ impl<T> Mailbox<T> {
     }
 }
 
-impl Mailbox<Option<ChessMan>> {
+impl SimpleBoard<Option<ChessMan>> {
     /// Set up a mailbox board from a bitboard.
     pub fn from_bitboard<BB: BitBoard>(bb: &BB) -> Self {
         let mut res = Self([None; 64]);

@@ -1,3 +1,7 @@
+//! Basic notations for simple entities and their variations.
+//!
+//!
+
 use std::{
     cmp::Ordering,
     fmt::{Display, write},
@@ -13,17 +17,26 @@ use crate::model::{
 };
 
 impl Square {
+    /// The file a square lies on.
+    ///
+    /// Lower-case lattin letters a, b, c, d, e, f, g, h
     #[inline]
     pub fn file(self) -> char {
         unsafe { char::from_u32_unchecked('a' as u32 + (self as u32 & 0x7)) }
     }
 
+    /// The rank a square lies on.
+    ///
+    /// 1..=8
     #[inline]
     pub fn rank(self) -> u8 {
         1 + ((self as u8 & 0x38) >> 3)
     }
 }
 
+/// Display square in standard algebraic notation
+///
+/// Equivalent to `format!("{}{}", sq.file(), sq.rank())`
 impl Display for Square {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", Self::VARIANTS[*self as usize])
@@ -86,7 +99,7 @@ impl Display for ChessColor {
 
 impl Display for PawnPromotion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:#}", ChessEchelon::from(*self))
+        ChessEchelon::from(*self).fmt(f)
     }
 }
 
@@ -119,7 +132,7 @@ impl Display for Rights {
             let files = self.1.rook_start[ChessColor::WHITE.ix()].map(|s| s.file());
             [files.map(|c| c.to_ascii_uppercase()), files]
         } else {
-            [['Q', 'K'], ['q', 'k']]
+            [['K', 'Q'], ['k', 'q']]
         };
 
         for c in [ChessColor::WHITE, ChessColor::BLACK] {

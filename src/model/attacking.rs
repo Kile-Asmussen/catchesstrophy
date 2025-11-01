@@ -13,23 +13,18 @@ use crate::model::{
 use super::ChessColor;
 
 pub trait AttackMaskStrategy {
-    type CachedMasks<'a, BB: BitBoard + 'a>: AttackMaskGenerator<'a, BB>;
-    fn new<'a, BB: BitBoard>(board: &'a BB) -> Self::CachedMasks<'a, BB> {
-        Self::CachedMasks::new(board)
+    type CachedData<'a, BB: BitBoard + 'a>: AttackMaskGenerator<'a, BB>;
+    fn new<'a, BB: BitBoard>(board: &'a BB) -> Self::CachedData<'a, BB> {
+        Self::CachedData::new(board)
     }
 }
 
 pub trait AttackMaskGenerator<'a, BB: BitBoard> {
     fn new(board: &'a BB) -> Self;
 
-    fn attacks<X: Panopticon>(&self, board: &'a BB, color: ChessColor) -> Attacks;
+    fn attacks(&self, board: &'a BB, color: ChessColor) -> Attacks;
 
-    fn attacks_after<X: Panopticon>(
-        &self,
-        board: &'a BB,
-        color: ChessColor,
-        mv: BitMove,
-    ) -> Attacks;
+    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: BitMove) -> Attacks;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,43 +39,39 @@ impl Attacks {
     }
 }
 
-pub struct FakeMoveEcharrayStrategy;
-pub struct FakeMoveEcharrayStrategyGenerator<'a, BB: BitBoard + 'a>(
-    Cow<'a, [u64; 6]>,
-    PhantomData<BB>,
-);
+pub struct FakeMoveSimplStrategy<X: Panopticon>(PhantomData<X>);
+pub struct FakeMoveSimpleStrategyGenerator<BB: BitBoard, X: Panopticon>(PhantomData<(X, BB)>);
 
-impl AttackMaskStrategy for FakeMoveEcharrayStrategy {
-    type CachedMasks<'a, BB: BitBoard + 'a> = FakeMoveEcharrayStrategyGenerator<'a, BB>;
+impl<X: Panopticon> AttackMaskStrategy for FakeMoveSimplStrategy<X> {
+    type CachedData<'a, BB: BitBoard + 'a> = FakeMoveSimpleStrategyGenerator<BB, X>;
 }
 
-impl<'a, BB: BitBoard> AttackMaskGenerator<'a, BB> for FakeMoveEcharrayStrategyGenerator<'a, BB> {
+impl<'a, BB, X> AttackMaskGenerator<'a, BB> for FakeMoveSimpleStrategyGenerator<BB, X>
+where
+    BB: BitBoard + 'a,
+    X: Panopticon,
+{
     fn new(board: &'a BB) -> Self {
-        FakeMoveEcharrayStrategyGenerator(board.side(board.ply().0), PhantomData)
+        FakeMoveSimpleStrategyGenerator(PhantomData)
     }
 
-    fn attacks<X: Panopticon>(&self, board: &BB, player: ChessColor) -> Attacks {
+    fn attacks(&self, board: &BB, player: ChessColor) -> Attacks {
         let pan = X::new(board.total());
         match player {
             ChessColor::WHITE => Attacks {
-                attack: attacks_from_echarray_white(pan, &self.0),
+                attack: attacks_from_echarray_white(pan, &board.side(ChessColor::WHITE)),
                 targeted_king: board.men(ChessColor::BLACK, ChessEchelon::KING),
             },
             ChessColor::BLACK => Attacks {
-                attack: attacks_from_echarray_black(pan, &self.0),
+                attack: attacks_from_echarray_black(pan, &board.side(ChessColor::WHITE)),
                 targeted_king: board.men(ChessColor::WHITE, ChessEchelon::KING),
             },
         }
     }
 
-    fn attacks_after<X: Panopticon>(
-        &self,
-        board: &'a BB,
-        color: ChessColor,
-        mv: BitMove,
-    ) -> Attacks {
+    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: BitMove) -> Attacks {
         let new_board = clone_make_pseudolegal_move(board, PseudoLegal(mv));
-        FakeMoveEcharrayStrategyGenerator::new(&new_board).attacks::<X>(&new_board, color)
+        Self::new(&new_board).attacks(&new_board, color)
     }
 }
 

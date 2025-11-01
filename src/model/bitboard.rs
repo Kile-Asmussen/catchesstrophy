@@ -116,6 +116,14 @@ pub trait MetaBoard: Clone {
     /// Update the _en-passant_ information in the transient values.
     fn set_en_passant(&mut self, eps: Option<EnPassant>);
 
+    /// Update all the transient info.
+    #[inline]
+    fn set_transients(&mut self, trans: Transients) {
+        self.set_castling_rights(trans.rights);
+        self.set_halfmove_clock(trans.halfmove_clock);
+        self.set_en_passant(trans.en_passant);
+    }
+
     /// Current Zobrist hash of the position.
     fn curr_hash(&self) -> u64;
 
@@ -228,6 +236,11 @@ impl MetaBoard for DefaultMetaBoard {
     #[inline]
     fn set_en_passant(&mut self, rights: Option<EnPassant>) {
         self.trans.en_passant = rights;
+    }
+
+    #[inline]
+    fn set_transients(&mut self, trans: Transients) {
+        self.trans = trans;
     }
 }
 
@@ -719,7 +732,7 @@ impl ChessBoard for FullerBitBoard {
     fn startpos<ZT: ZobristTables>() -> Self {
         Self {
             bitboard: FullBitBoard::startpos::<ZT>(),
-            total: [0x0000_0000_0000_FF00, 0x00FF_0000_0000_0000],
+            total: [0x0000_0000_0000_FFFF, 0xFFFF_0000_0000_0000],
         }
     }
 

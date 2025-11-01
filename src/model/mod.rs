@@ -12,11 +12,11 @@ pub mod bitboard;
 pub mod castling;
 pub mod game;
 pub mod hash;
-pub mod mailbox;
 pub mod movegen;
 pub mod moving;
 pub mod notation;
 pub mod perft;
+pub mod setup;
 pub mod utils;
 pub mod vision;
 
@@ -33,7 +33,7 @@ pub mod vision;
 /// 0-63 are useful in bit arithmetic and in array indexing.
 /// 
 /// (The alternative '0x88' numbering scheme is more useful
-/// in certain mailbox representations (see [`mailbox`].)
+/// in certain mailbox representations (see [`tableboard`].)
 /// In that scheme the rank and file of a square
 /// are contained in separate nibbles of a byte, but that is
 /// not implemented in this crate.)
@@ -67,7 +67,7 @@ impl Square {
         unsafe { std::mem::transmute::<u8, Square>(ix & 0x3Fu8) }
     }
 
-    /// Mirror chessboard north to sout
+    /// Mirror chessboard north to south
     #[inline]
     pub fn mirror_ns(self) -> Self {
         unsafe { std::mem::transmute::<u8, Square>(self as u8 ^ 0x38u8) }

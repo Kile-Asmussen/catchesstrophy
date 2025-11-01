@@ -4,25 +4,45 @@
 
 use crate::model::{
     ChessMan, PseudoLegal, Square,
-    attacking::FakeMoveEcharrayStrategy,
+    attacking::FakeMoveSimplStrategy,
     bitboard::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
     hash::{CompactZobristTables, FullZobristTables},
-    mailbox::Mailbox,
     movegen::{BlessingStrategy, LegalBlessing, NoBlessing, enumerate},
     perft::{CloneMake, HashMapMemo, MakeUnmake, perft},
+    setup::SimpleBoard,
     vision::{MostlyBits, Panopticon},
 };
 
 #[test]
 fn main_perft() {
-    println!("Fuller");
+    println!("Fuller:");
     perft::<
         FullerBitBoard,
         MostlyBits,
-        LegalBlessing<FakeMoveEcharrayStrategy, MostlyBits>,
+        LegalBlessing<FakeMoveSimplStrategy<MostlyBits>>,
         CloneMake,
         FullZobristTables,
-    >(1, false, ())
+    >(5, false, ())
+    .pretty_print();
+
+    println!("\nFull:");
+    perft::<
+        FullBitBoard,
+        MostlyBits,
+        LegalBlessing<FakeMoveSimplStrategy<MostlyBits>>,
+        CloneMake,
+        FullZobristTables,
+    >(5, false, ())
+    .pretty_print();
+
+    println!("\nCompact:");
+    perft::<
+        CompactBitBoard,
+        MostlyBits,
+        LegalBlessing<FakeMoveSimplStrategy<MostlyBits>>,
+        CloneMake,
+        FullZobristTables,
+    >(5, false, ())
     .pretty_print();
 }
 

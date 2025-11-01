@@ -63,6 +63,8 @@ pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
 ) {
     let zobristhashes = ZT::static_table();
 
+    board.set_transients(trans);
+
     board.prev_ply();
 
     simple_move(board, mv.0, zobristhashes);
@@ -70,9 +72,7 @@ pub fn unmake_legal_move<BB: BitBoard, ZT: ZobristTables>(
     pawn_special(board, mv.0, zobristhashes);
     castling_move(board, mv.0, zobristhashes);
 
-    board.set_castling_rights(trans.rights);
-    board.set_halfmove_clock(trans.halfmove_clock);
-    board.set_en_passant(trans.en_passant);
+    board.set_transients(trans);
 }
 
 /// Clone the board and make the legal move on the clone.
@@ -325,7 +325,9 @@ impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
     }
 
     #[inline]
-    fn set_halfmove_clock(&mut self, val: u8) {}
+    fn set_halfmove_clock(&mut self, val: u8) {
+        // self.0.set_halfmove_clock(val)
+    }
 
     #[inline]
     fn set_castling_rights(&mut self, rights: [[bool; 2]; 2]) {
@@ -335,6 +337,11 @@ impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
     #[inline]
     fn set_en_passant(&mut self, eps: Option<EnPassant>) {
         // self.0.set_en_passant(eps);
+    }
+
+    #[inline]
+    fn set_transients(&mut self, trans: Transients) {
+        // self.0.set_transients(trans)
     }
 
     #[inline]
@@ -400,12 +407,19 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
         0
     }
 
+    #[inline]
     fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
         None
     }
 
+    #[inline]
     fn side(&self, color: ChessColor) -> std::borrow::Cow<'_, [u64; 6]> {
         std::borrow::Cow::Owned([0; 6])
+    }
+
+    #[inline]
+    fn comm_at(&self, sq: Square) -> Option<super::ChessCommoner> {
+        None
     }
 }
 
@@ -458,6 +472,9 @@ impl MetaBoard for HashOnly {
 
     #[inline]
     fn set_en_passant(&mut self, rights: Option<EnPassant>) {}
+
+    #[inline]
+    fn set_transients(&mut self, trans: Transients) {}
 }
 
 impl ChessBoard for HashOnly {
@@ -479,6 +496,7 @@ impl ChessBoard for HashOnly {
         self.0
     }
 
+    #[inline]
     fn empty() -> Self {
         Self(0, Transients::empty(), ChessColor::WHITE, &CLASSIC_CASTLING)
     }
@@ -503,11 +521,18 @@ impl BitBoard for HashOnly {
         0
     }
 
+    #[inline]
     fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
         None
     }
 
+    #[inline]
     fn side(&self, color: ChessColor) -> std::borrow::Cow<'_, [u64; 6]> {
         std::borrow::Cow::Owned([0; 6])
+    }
+
+    #[inline]
+    fn comm_at(&self, sq: Square) -> Option<super::ChessCommoner> {
+        self.ech_at(sq).and_then(super::ChessCommoner::from_echelon)
     }
 }
