@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::model::{
+use crate::bitboard::{
     BitMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
     LegalMove, PseudoLegal, SpecialMove, Square,
     attacking::{AttackMaskGenerator, AttackMaskStrategy, Attacks},

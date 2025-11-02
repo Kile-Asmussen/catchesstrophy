@@ -1,4 +1,4 @@
-use crate::model::{CastlingDirection, ChessColor, Square};
+use crate::bitboard::{CastlingDirection, ChessColor, Square};
 
 #[derive(Debug)]
 pub struct Castling {

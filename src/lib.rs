@@ -2,7 +2,7 @@
 #![feature(portable_simd)]
 #![feature(duration_millis_float)]
 
-use crate::model::{
+use crate::bitboard::{
     ChessMan, PseudoLegal, Square,
     attacking::FakeMoveSimplStrategy,
     board::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
@@ -47,4 +47,4 @@ fn main_perft() {
 }
 
 /// Modeling the game of chess.
-pub mod model;
+pub mod bitboard;

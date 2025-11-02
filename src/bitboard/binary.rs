@@ -3,7 +3,7 @@
 /// Here be ~~dragons~~ SIMD instructions.
 use std::simd::{num::SimdUint, u64x2, u64x4};
 
-use crate::model::{
+use crate::bitboard::{
     Square,
     notation::show_mask,
     vision::{PawnVision, PawnsBitBlit, Vision},

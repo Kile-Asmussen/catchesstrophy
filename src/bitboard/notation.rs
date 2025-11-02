@@ -9,7 +9,7 @@ use std::{
 
 use strum::EnumIs;
 
-use crate::model::{
+use crate::bitboard::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessMan, ChessPawn, ChessPiece,
     EnPassant, PawnPromotion, SpecialMove, Square, Transients, VariantNames,
     castling::Castling,

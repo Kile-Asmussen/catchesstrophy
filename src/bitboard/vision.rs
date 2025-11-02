@@ -1,8 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    biterate,
-    model::{
+    bitboard::{
         ChessColor, ChessPiece, Square,
         binary::{
             bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
@@ -11,6 +10,7 @@ use crate::{
             white_pawn_attack_fill, white_pawn_attack_fill_simdx2,
         },
     },
+    biterate,
 };
 
 pub type MostlyBits = SimplePanopticon<

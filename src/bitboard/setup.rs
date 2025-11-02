@@ -15,7 +15,7 @@ use strum::VariantArray;
 
 use crate::{
     biterate,
-    model::{
+    bitboard::{
         ChessColor, ChessEchelon, ChessMan, Square, board::BitBoard, utils::SliceExtensions,
         vision::SimplePanopticon,
     },

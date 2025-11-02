@@ -23,7 +23,7 @@
 
 use std::borrow::Cow;
 
-use crate::model::{
+use crate::bitboard::{
     ChessColor, ChessCommoner, ChessEchelon, ChessMan, EnPassant, Square, Transients,
     castling::{CLASSIC_CASTLING, Castling},
     hash::ZobristTables,

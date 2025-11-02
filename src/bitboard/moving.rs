@@ -21,7 +21,7 @@ use std::{hash::Hash, marker::PhantomData};
 
 use strum::VariantArray;
 
-use crate::model::{
+use crate::bitboard::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
     LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
     board::{BitBoard, ChessBoard, MetaBoard},

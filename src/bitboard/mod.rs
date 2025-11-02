@@ -31,12 +31,6 @@ pub mod vision;
 /// numbering scheme because `catchesstropy` uses a bitboard
 /// representation of the chessboard, where numbers in the range
 /// 0-63 are useful in bit arithmetic and in array indexing.
-/// 
-/// (The alternative '0x88' numbering scheme is more useful
-/// in certain mailbox representations (see [`tableboard`].)
-/// In that scheme the rank and file of a square
-/// are contained in separate nibbles of a byte, but that is
-/// not implemented in this crate.)
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
      VariantNames)]

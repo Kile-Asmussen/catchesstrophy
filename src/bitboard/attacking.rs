@@ -2,7 +2,7 @@ use std::{borrow::Cow, marker::PhantomData};
 
 use strum::VariantArray;
 
-use crate::model::{
+use crate::bitboard::{
     BitMove, ChessEchelon, PseudoLegal,
     board::BitBoard,
     moving::clone_make_pseudolegal_move,

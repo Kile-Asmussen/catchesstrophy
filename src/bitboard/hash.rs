@@ -53,7 +53,7 @@ use strum::VariantArray;
 
 use crate::{
     biterate,
-    model::{
+    bitboard::{
         CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, utils::bitor_sum,
         vision::PieceVision,
     },

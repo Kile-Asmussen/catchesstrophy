@@ -6,7 +6,7 @@ use std::{
 
 use rand::{RngCore, rngs::SmallRng};
 
-use crate::model::{
+use crate::bitboard::{
     LegalMove, Transients,
     board::BitBoard,
     hash::{ZobHasher, ZobristTables, pi_rng},

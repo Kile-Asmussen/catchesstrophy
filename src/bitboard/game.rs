@@ -3,7 +3,7 @@ use std::{
     hash::Hasher,
 };
 
-use crate::model::{
+use crate::bitboard::{
     BitMove, LegalMove, Transients,
     hash::ZobHasher,
     notation::{AlgNotaion, CoordNotation},
