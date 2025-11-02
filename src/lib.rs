@@ -48,3 +48,4 @@ fn main_perft() {
 
 /// Modeling the game of chess.
 pub mod bitboard;
+pub mod model;

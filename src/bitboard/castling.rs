@@ -10,7 +10,7 @@ pub struct Castling {
     pub rook_start: [[Square; 2]; 2],
     pub king_end: [[Square; 2]; 2],
     pub king_start: [Square; 2],
-    pub chess960: bool,
+    pub capture_own_rook: bool,
 }
 
 pub const CLASSIC_CASTLING: Castling = Castling {
@@ -22,5 +22,5 @@ pub const CLASSIC_CASTLING: Castling = Castling {
     rook_start: [[Square::h1, Square::a1], [Square::h8, Square::a8]],
     king_start: [Square::e1, Square::e8],
     king_end: [[Square::g1, Square::c1], [Square::g8, Square::c8]],
-    chess960: false,
+    capture_own_rook: false,
 };

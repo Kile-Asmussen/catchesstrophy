@@ -3,14 +3,12 @@ use std::{borrow::Cow, marker::PhantomData};
 use strum::VariantArray;
 
 use crate::bitboard::{
-    BitMove, ChessEchelon, PseudoLegal,
     board::BitBoard,
     moving::clone_make_pseudolegal_move,
     utils::SliceExtensions,
     vision::{Panopticon, Vision},
 };
-
-use super::ChessColor;
+use crate::model::*;
 
 pub trait AttackMaskStrategy {
     type CachedData<'a, BB: BitBoard + 'a>: AttackMaskGenerator<'a, BB>;
@@ -24,7 +22,7 @@ pub trait AttackMaskGenerator<'a, BB: BitBoard> {
 
     fn attacks(&self, board: &'a BB, color: ChessColor) -> Attacks;
 
-    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: BitMove) -> Attacks;
+    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: ChessMove) -> Attacks;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,16 +58,16 @@ where
         match player {
             ChessColor::WHITE => Attacks {
                 attack: attacks_from_echarray_white(pan, &board.side(ChessColor::WHITE)),
-                targeted_king: board.men(ChessColor::BLACK, ChessEchelon::KING),
+                targeted_king: board.men(ChessColor::BLACK, ChessPiece::KING),
             },
             ChessColor::BLACK => Attacks {
                 attack: attacks_from_echarray_black(pan, &board.side(ChessColor::WHITE)),
-                targeted_king: board.men(ChessColor::WHITE, ChessEchelon::KING),
+                targeted_king: board.men(ChessColor::WHITE, ChessPiece::KING),
             },
         }
     }
 
-    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: BitMove) -> Attacks {
+    fn attacks_after(&self, board: &'a BB, color: ChessColor, mv: ChessMove) -> Attacks {
         let new_board = clone_make_pseudolegal_move(board, PseudoLegal(mv));
         Self::new(&new_board).attacks(&new_board, color)
     }
@@ -77,7 +75,7 @@ where
 
 #[inline]
 fn attacks_from_echarray_pieces<X: Panopticon>(pan: X, echs: &[u64; 6]) -> u64 {
-    use ChessEchelon::*;
+    use ChessPiece::*;
 
     pan.knight().surveil(echs[KNIGHT.ix()])
         ^ pan.bishop().surveil(echs[BISHOP.ix()])
@@ -88,12 +86,10 @@ fn attacks_from_echarray_pieces<X: Panopticon>(pan: X, echs: &[u64; 6]) -> u64 {
 
 #[inline]
 fn attacks_from_echarray_black<X: Panopticon>(pan: X, echs: &[u64; 6]) -> u64 {
-    pan.black_pawn().surveil(echs[ChessEchelon::PAWN.ix()])
-        ^ attacks_from_echarray_pieces(pan, echs)
+    pan.black_pawn().surveil(echs[ChessPiece::PAWN.ix()]) ^ attacks_from_echarray_pieces(pan, echs)
 }
 
 #[inline]
 fn attacks_from_echarray_white<X: Panopticon>(pan: X, echs: &[u64; 6]) -> u64 {
-    pan.white_pawn().surveil(echs[ChessEchelon::PAWN.ix()])
-        ^ attacks_from_echarray_pieces(pan, echs)
+    pan.white_pawn().surveil(echs[ChessPiece::PAWN.ix()]) ^ attacks_from_echarray_pieces(pan, echs)
 }

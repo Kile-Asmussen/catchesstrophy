@@ -4,10 +4,11 @@
 use std::simd::{num::SimdUint, u64x2, u64x4};
 
 use crate::bitboard::{
-    Square,
     notation::show_mask,
     vision::{PawnVision, PawnsBitBlit, Vision},
 };
+
+use crate::model::*;
 
 #[test]
 fn test() {

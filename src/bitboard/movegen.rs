@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::bitboard::{
-    BitMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
+    ChessMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
     LegalMove, PseudoLegal, SpecialMove, Square,
     attacking::{AttackMaskGenerator, AttackMaskStrategy, Attacks},
     board::BitBoard,
@@ -24,10 +24,10 @@ pub trait MoveBlesser<'a, BB: BitBoard> {
     fn new(board: &'a BB) -> Self;
 
     #[inline]
-    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove>;
+    fn bless(&self, board: &'a BB, mv: ChessMove) -> Option<Self::BlessedMove>;
 
     #[inline]
-    fn bless_into(&self, board: &'a BB, mv: BitMove, buffer: &mut Vec<Self::BlessedMove>) {
+    fn bless_into(&self, board: &'a BB, mv: ChessMove, buffer: &mut Vec<Self::BlessedMove>) {
         if let Some(b) = self.bless(board, mv) {
             buffer.push(b)
         }
@@ -53,7 +53,7 @@ impl<'a, BB: BitBoard> MoveBlesser<'a, BB> for PseudoLegalMoveBlesser<'a, BB> {
     }
 
     #[inline]
-    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
+    fn bless(&self, board: &'a BB, mv: ChessMove) -> Option<Self::BlessedMove> {
         Some(PseudoLegal(mv))
     }
 }
@@ -84,7 +84,7 @@ impl<'a, BB: BitBoard, AS: AttackMaskStrategy> MoveBlesser<'a, BB>
         }
     }
 
-    fn bless(&self, board: &'a BB, mv: BitMove) -> Option<Self::BlessedMove> {
+    fn bless(&self, board: &'a BB, mv: ChessMove) -> Option<Self::BlessedMove> {
         let player = board.ply().0;
         if self.attack_strat.attacks_after(board, player, mv).check() {
             return None;
@@ -192,7 +192,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
 
     biterate! {for from in pawns; {
         biterate! {for to in pawn_vision.push(from); {
-            let mut mv = BitMove {
+            let mut mv = ChessMove {
                 from, to,
                 ech: ChessEchelon::PAWN,
                 special: None,
@@ -207,7 +207,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
         }}
 
         biterate! {for to in pawn_vision.hits(from, enemy); {
-            let mut mv = BitMove {
+            let mut mv = ChessMove {
                 from, to,
                 ech: ChessEchelon::PAWN,
                 special: None,
@@ -228,7 +228,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
 fn promotions<'a, BB: BitBoard, L: MoveBlesser<'a, BB>>(
     board: &'a BB,
     blesser: &L,
-    mut mv: BitMove,
+    mut mv: ChessMove,
     buffer: &mut Vec<L::BlessedMove>,
 ) {
     use SpecialMove::*;
@@ -253,7 +253,7 @@ fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
 ) {
     biterate! {for from in pieces; {
         biterate! {for to in piece.hits(from, friendly); {
-            let mut mv = BitMove {
+            let mut mv = ChessMove {
                 from, to,
                 ech: ChessEchelon::from(P::ID),
                 special: None,
@@ -286,7 +286,7 @@ fn castling_move<'a, BB: BitBoard, L: MoveBlesser<'a, BB>>(
             continue;
         }
 
-        let mv = BitMove {
+        let mv = ChessMove {
             from: castling.king_start[player.ix()],
             to: castling.king_end[player.ix()][dir.ix()],
             ech: ChessEchelon::KING,

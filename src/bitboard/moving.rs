@@ -22,7 +22,7 @@ use std::{hash::Hash, marker::PhantomData};
 use strum::VariantArray;
 
 use crate::bitboard::{
-    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
+    ChessMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
     LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
     board::{BitBoard, ChessBoard, MetaBoard},
     castling::{CLASSIC_CASTLING, Castling},
@@ -96,7 +96,7 @@ pub fn clone_make_pseudolegal_move<BB: BitBoard + Clone>(board: &BB, mv: PseudoL
 }
 
 /// Compute the zobrist hash that would result from applying this move.
-pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: BitMove) -> u64 {
+pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: ChessMove) -> u64 {
     let mut res = HashOnly(
         board.curr_hash(),
         board.trans(),
@@ -115,7 +115,7 @@ pub fn hash_prospective_move<BB: BitBoard, ZT: ZobristTables>(board: &BB, mv: Bi
 #[inline]
 pub fn simple_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: BitMove,
+    mv: ChessMove,
     zobristhashes: &'static ZT,
 ) {
     let player = board.ply().0;
@@ -173,7 +173,7 @@ pub fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
 #[inline]
 pub fn capturing_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: BitMove,
+    mv: ChessMove,
     sq: Square,
     zobristhashes: &'static ZT,
 ) {
@@ -202,7 +202,7 @@ pub fn capturing_move<BB: BitBoard, ZT: ZobristTables>(
 #[inline]
 pub fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: BitMove,
+    mv: ChessMove,
     zobristhashes: &'static ZT,
 ) {
     let player = board.ply().0;
@@ -250,7 +250,7 @@ pub fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
 #[inline]
 pub fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: BitMove,
+    mv: ChessMove,
     zobristhashes: &'static ZT,
 ) {
     let player = board.ply().0;
@@ -279,7 +279,7 @@ pub fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
 #[inline]
 pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    mv: BitMove,
+    mv: ChessMove,
     zobristhashes: &'static ZT,
 ) {
     let player = board.ply().0;

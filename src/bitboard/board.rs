@@ -24,11 +24,11 @@
 use std::borrow::Cow;
 
 use crate::bitboard::{
-    ChessColor, ChessCommoner, ChessEchelon, ChessMan, EnPassant, Square, Transients,
     castling::{CLASSIC_CASTLING, Castling},
     hash::ZobristTables,
     utils::{SliceExtensions, bitor_sum},
 };
+use crate::model::*;
 use strum::VariantArray;
 
 /// The basic operations of a bitboard.
@@ -38,13 +38,13 @@ pub trait BitBoard: ChessBoard {
     /// (The mask usually has only two bits set.)
     ///
     /// Notably this operation, because it uses XOR, is an involution.
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64);
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64);
 
     /// Retrieve the bitboard representing a given echelon and color of chessman.
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64;
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64;
 
     /// Determine if a chessman of some echelon stands on a square
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon>;
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece>;
 
     /// Determine if a chessman of some non-king echelon stands on a square
     fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
@@ -365,13 +365,13 @@ pub struct CompactBitBoard {
 impl BitBoard for CompactBitBoard {
     /// Updates both the echelon mask and the color mask separately.
     #[inline]
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64) {
         self.ech[ech.ix()] ^= mask;
         self.colors[color.ix()] ^= mask;
     }
 
     /// Computed with a binary OR operation
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64 {
         self.ech[ech.ix()] & self.colors[color.ix()]
     }
 
@@ -386,9 +386,9 @@ impl BitBoard for CompactBitBoard {
     }
 
     /// Very efficiently computed as there are only 6 masks to check
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
         let bit = 1 << sq.ix();
-        for c in ChessEchelon::VARIANTS.clones() {
+        for c in ChessPiece::VARIANTS.clones() {
             if (self.ech[c.ix()] & bit) != 0 {
                 return Some(c);
             }
@@ -455,8 +455,8 @@ impl ChessBoard for CompactBitBoard {
     /// - Are the sum of the echelon masks equal to the sum of the color masks?
     /// - Is the procedurally updated hash equal to the recomputed hash?
     fn sanity_check<ZT: ZobristTables>(&self) {
-        for p1 in ChessEchelon::VARIANTS {
-            for p2 in ChessEchelon::VARIANTS {
+        for p1 in ChessPiece::VARIANTS {
+            for p2 in ChessPiece::VARIANTS {
                 let (p1, p2) = (*p1, *p2);
                 if p1 >= p2 {
                     continue;
@@ -536,13 +536,13 @@ pub struct FullBitBoard {
 impl BitBoard for FullBitBoard {
     /// Computed in a single XOR operation.
     #[inline]
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64) {
         self.masks[color.ix()][ech.ix()] ^= mask;
     }
 
     /// Directly on hand.
     #[inline]
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64 {
         self.masks[color.ix()][ech.ix()]
     }
 
@@ -559,9 +559,9 @@ impl BitBoard for FullBitBoard {
     }
 
     /// Not so efficiently computed as there are twelve masks to check
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
         let bit = 1 << sq.ix();
-        for c in ChessEchelon::VARIANTS.clones() {
+        for c in ChessPiece::VARIANTS.clones() {
             if (self.masks[ChessColor::WHITE.ix()][c.ix()] & bit) != 0
                 || (self.masks[ChessColor::BLACK.ix()][c.ix()] & bit) != 0
             {
@@ -619,8 +619,8 @@ impl ChessBoard for FullBitBoard {
     /// - All the bit masks are non-overlapping
     /// - The procedurally computed hash is equal to the recomputed hash
     fn sanity_check<ZT: ZobristTables>(&self) {
-        for p1 in ChessEchelon::VARIANTS {
-            for p2 in ChessEchelon::VARIANTS {
+        for p1 in ChessPiece::VARIANTS {
+            for p2 in ChessPiece::VARIANTS {
                 for c1 in [ChessColor::WHITE, ChessColor::BLACK] {
                     for c2 in [ChessColor::WHITE, ChessColor::BLACK] {
                         let (p1, p2) = (*p1, *p2);
@@ -675,14 +675,14 @@ pub struct FullerBitBoard {
 impl BitBoard for FullerBitBoard {
     /// Updates both the chessman mask and the color mask separately.
     #[inline]
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64) {
         self.bitboard.xor(color, ech, mask);
         self.total[color.ix()] ^= mask;
     }
 
     /// On hand directly.
     #[inline]
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64 {
         self.bitboard.men(color, ech)
     }
 
@@ -700,7 +700,7 @@ impl BitBoard for FullerBitBoard {
 
     /// Delegated
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
         self.bitboard.ech_at(sq)
     }
 

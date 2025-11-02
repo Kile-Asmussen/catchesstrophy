@@ -10,7 +10,7 @@ use std::{
 use strum::EnumIs;
 
 use crate::bitboard::{
-    BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessMan, ChessPawn, ChessPiece,
+    CastlingDirection, ChessColor, ChessEchelon, ChessMan, ChessMove, ChessPawn, ChessPiece,
     EnPassant, PawnPromotion, SpecialMove, Square, Transients, VariantNames,
     castling::Castling,
     utils::{IteratorExtensions, SliceExtensions},
@@ -128,7 +128,7 @@ impl Display for Rights {
             return write!(f, "-");
         }
 
-        let letters = if self.1.chess960 {
+        let letters = if self.1.capture_own_rook {
             let files = self.1.rook_start[ChessColor::WHITE.ix()].map(|s| s.file());
             [files.map(|c| c.to_ascii_uppercase()), files]
         } else {
@@ -183,9 +183,9 @@ pub struct CoordNotation {
     pub prom: Option<PawnPromotion>,
 }
 
-impl From<BitMove> for CoordNotation {
+impl From<ChessMove> for CoordNotation {
     #[inline]
-    fn from(value: BitMove) -> Self {
+    fn from(value: ChessMove) -> Self {
         Self {
             from: value.from,
             to: value.to,
@@ -380,11 +380,11 @@ pub fn show_mask(mask: u64) -> String {
 }
 
 trait MoveMatcher {
-    fn matches(self, mv: BitMove) -> bool;
+    fn matches(self, mv: ChessMove) -> bool;
 }
 
 impl MoveMatcher for CoordNotation {
-    fn matches(self, mv: BitMove) -> bool {
+    fn matches(self, mv: ChessMove) -> bool {
         self.from == mv.from
             && self.to == mv.to
             && (self.prom.is_none() || self.prom == PawnPromotion::from_special(mv.special))
@@ -392,7 +392,7 @@ impl MoveMatcher for CoordNotation {
 }
 
 impl MoveMatcher for AlgNotaion {
-    fn matches(self, mv: BitMove) -> bool {
+    fn matches(self, mv: ChessMove) -> bool {
         match self {
             Self::Pawn(p, _) => {
                 mv.ech == ChessEchelon::PAWN
