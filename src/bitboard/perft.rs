@@ -8,7 +8,7 @@ use rand::{RngCore, rngs::SmallRng};
 
 use crate::model::{
     LegalMove, Transients,
-    bitboard::BitBoard,
+    board::BitBoard,
     hash::{ZobHasher, ZobristTables, pi_rng},
     movegen::{BlessingStrategy, enumerate},
     moving::{clone_make_legal_move, make_legal_move, unmake_legal_move},

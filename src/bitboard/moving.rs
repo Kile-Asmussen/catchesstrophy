@@ -24,7 +24,7 @@ use strum::VariantArray;
 use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
     LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
-    bitboard::{BitBoard, ChessBoard, MetaBoard},
+    board::{BitBoard, ChessBoard, MetaBoard},
     castling::{CLASSIC_CASTLING, Castling},
     hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},

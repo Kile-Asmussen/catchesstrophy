@@ -5,7 +5,7 @@
 use crate::model::{
     ChessMan, PseudoLegal, Square,
     attacking::FakeMoveSimplStrategy,
-    bitboard::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
+    board::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
     hash::{CompactZobristTables, FullZobristTables},
     movegen::{BlessingStrategy, LegalBlessing, NoBlessing, enumerate},
     perft::{CloneMake, HashMapMemo, MakeUnmake, perft},

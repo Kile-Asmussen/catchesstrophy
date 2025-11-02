@@ -4,7 +4,7 @@ use crate::model::{
     BitMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
     LegalMove, PseudoLegal, SpecialMove, Square,
     attacking::{AttackMaskGenerator, AttackMaskStrategy, Attacks},
-    bitboard::BitBoard,
+    board::BitBoard,
     castling,
     notation::show_mask,
     utils::biterate,

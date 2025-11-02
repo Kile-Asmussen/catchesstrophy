@@ -8,7 +8,7 @@ use strum::{EnumIs, FromRepr, VariantArray, VariantNames};
 
 pub mod attacking;
 pub mod binary;
-pub mod bitboard;
+pub mod board;
 pub mod castling;
 pub mod game;
 pub mod hash;

@@ -4,7 +4,7 @@ use strum::VariantArray;
 
 use crate::model::{
     BitMove, ChessEchelon, PseudoLegal,
-    bitboard::BitBoard,
+    board::BitBoard,
     moving::clone_make_pseudolegal_move,
     utils::SliceExtensions,
     vision::{Panopticon, Vision},
