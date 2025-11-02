@@ -24,7 +24,7 @@
 use std::borrow::Cow;
 
 use crate::bitboard::{
-    castling::{CLASSIC_CASTLING, Castling},
+    castling::BitCastling,
     hash::ZobristTables,
     utils::{SliceExtensions, bitor_sum},
 };
@@ -156,14 +156,14 @@ pub trait MetaBoard: Clone {
     /// The chess variants Chess960 and Chess480 have different castling
     /// rules, and so castling rules are specified in data, rather than
     /// hard-coded.
-    fn castling(&self) -> &'static Castling;
+    fn castling(&self) -> &'static BitCastling;
 }
 
 /// Default implementation of the [`MetaBoard`] trait, used for
 /// inclusion-as-inheritance in the bitboard implementations.
 #[derive(Debug, Clone, Copy)]
 pub struct DefaultMetaBoard {
-    pub castling: &'static Castling,
+    pub castling: &'static BitCastling,
     pub hash: u64,
     pub turn: u16,
     pub player: ChessColor,
@@ -183,7 +183,7 @@ impl PartialEq for DefaultMetaBoard {
 
 impl MetaBoard for DefaultMetaBoard {
     #[inline]
-    fn castling(&self) -> &'static Castling {
+    fn castling(&self) -> &'static BitCastling {
         self.castling
     }
 
@@ -251,7 +251,7 @@ impl ChessBoard for DefaultMetaBoard {
     /// in both directtions for both players.
     fn startpos<ZT: ZobristTables>() -> Self {
         let mut res = Self {
-            castling: &CLASSIC_CASTLING,
+            castling: &BitCastling::CLASSIC_CASTLING,
             hash: 0,
             player: ChessColor::WHITE,
             turn: 1,
@@ -279,7 +279,7 @@ impl ChessBoard for DefaultMetaBoard {
     /// Empty chessboard
     fn empty() -> Self {
         Self {
-            castling: &CLASSIC_CASTLING,
+            castling: &BitCastling::CLASSIC_CASTLING,
             hash: 0,
             turn: 1,
             player: ChessColor::WHITE,
@@ -326,7 +326,7 @@ impl<BB: HasDefaultMetaBoard + Clone> MetaBoard for BB {
     }
 
     #[inline]
-    fn castling(&self) -> &'static Castling {
+    fn castling(&self) -> &'static BitCastling {
         self.metaboard().castling()
     }
 

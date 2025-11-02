@@ -25,7 +25,7 @@ use crate::bitboard::{
     ChessMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
     LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
     board::{BitBoard, ChessBoard, MetaBoard},
-    castling::{CLASSIC_CASTLING, Castling},
+    castling::{CLASSIC_CASTLING, BitCastling},
     hash::{NoHashes, ZobristTables},
     notation::{AlgNotaion, CoordNotation},
 };
@@ -364,7 +364,7 @@ impl<'a, BB: BitBoard> MetaBoard for MoveOnly<'a, BB> {
     fn prev_ply(&mut self) {}
 
     #[inline]
-    fn castling(&self) -> &'static super::castling::Castling {
+    fn castling(&self) -> &'static super::castling::BitCastling {
         self.0.castling()
     }
 }
@@ -429,7 +429,7 @@ pub struct HashOnly(
     pub u64,
     pub Transients,
     pub ChessColor,
-    pub &'static Castling,
+    pub &'static BitCastling,
 );
 
 impl MetaBoard for HashOnly {
@@ -460,7 +460,7 @@ impl MetaBoard for HashOnly {
     fn prev_ply(&mut self) {}
 
     #[inline]
-    fn castling(&self) -> &'static super::castling::Castling {
+    fn castling(&self) -> &'static super::castling::BitCastling {
         self.3
     }
 

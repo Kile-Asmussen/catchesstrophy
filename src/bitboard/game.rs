@@ -4,7 +4,6 @@ use std::{
 };
 
 use crate::bitboard::{
-    ChessMove, LegalMove, Transients,
     hash::ZobHasher,
     notation::{AlgNotaion, CoordNotation},
 };

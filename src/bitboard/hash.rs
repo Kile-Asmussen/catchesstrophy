@@ -51,12 +51,10 @@ use rand::{Rng, RngCore, SeedableRng, rngs::SmallRng};
 use static_init::Lazy;
 use strum::VariantArray;
 
+use crate::model::*;
 use crate::{
+    bitboard::{utils::bitor_sum, vision::PieceVision},
     biterate,
-    bitboard::{
-        CastlingDirection, ChessColor, ChessEchelon, EnPassant, Square, utils::bitor_sum,
-        vision::PieceVision,
-    },
 };
 
 /// The rng state used to generate all the random values needed by the tables

@@ -14,7 +14,6 @@ pub mod game;
 pub mod hash;
 pub mod movegen;
 pub mod moving;
-pub mod notation;
 pub mod perft;
 pub mod setup;
 pub mod utils;

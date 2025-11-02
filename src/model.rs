@@ -125,7 +125,7 @@ pub enum ChessMan {
 }
 
 impl ChessMan {
-    /// The associated colorless echelon of a chessman.
+    /// The associated colorless piece type of a chessman.
     pub fn ech(self) -> ChessPiece {
         ChessPiece::from(self)
     }
@@ -188,7 +188,7 @@ impl From<ChessMan> for ChessColor {
 /// The discriminant values of this enum are the absolute
 /// values of the [`ChessMan`] enum, or equivalently, the white chessmen.
 ///
-/// This enum is used _far_ more extensively than
+/// This enum is used _far_ mo re extensively than
 /// its parent enum, on account of most of the implementation
 /// relying on arrays of length six to represent information about
 /// each rank of chessmen.
@@ -341,7 +341,7 @@ pub enum PawnPromotion {
 }
 
 impl PawnPromotion {
-    /// See [`ChessEchelon::ix`].
+    /// See [`ChessPiece::ix`].
     #[inline]
     pub fn ix(self) -> usize {
         self as usize - 1
@@ -650,7 +650,7 @@ pub struct Transients {
 
 impl Transients {
     /// Transients at the starting position of a standard chessboard
-    fn startpos() -> Self {
+    pub fn startpos() -> Self {
         Self {
             en_passant: None,
             halfmove_clock: 0,
@@ -659,7 +659,7 @@ impl Transients {
     }
 
     /// Transients of an empty chessboard
-    fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             en_passant: None,
             halfmove_clock: 0,
@@ -681,9 +681,9 @@ impl Transients {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EnPassant {
     /// Square upon which en-passant capture is possible.
-    square: Square,
+    pub square: Square,
     /// Square of the captured pawn.
-    capture: Square,
+    pub capture: Square,
 }
 
 impl EnPassant {
@@ -720,7 +720,7 @@ pub struct CastlingRules {
 }
 
 impl CastlingRules {
-    const STANDARD: CastlingRules = CastlingRules {
+    pub const STANDARD: CastlingRules = CastlingRules {
         rook_start: [[Square::a1, Square::h1], [Square::a8, Square::h8]],
         rook_end: [[Square::d1, Square::f1], [Square::d8, Square::f8]],
         king_start: [Square::e1, Square::e8],
