@@ -10,7 +10,6 @@ pub mod attacking;
 pub mod binary;
 pub mod board;
 pub mod castling;
-pub mod game;
 pub mod hash;
 pub mod movegen;
 pub mod moving;

@@ -473,7 +473,7 @@ impl From<ChessCommoner> for SpecialMove {
 
 impl ChessPawn {
     /// Attempt to convert from special move.
-    fn from_special(special: Option<SpecialMove>) -> Option<Self> {
+    pub fn from_special(special: Option<SpecialMove>) -> Option<Self> {
         if special == Some(SpecialMove::PAWN) {
             Some(ChessPawn::PAWN)
         } else {
@@ -484,7 +484,7 @@ impl ChessPawn {
 
 impl PawnPromotion {
     /// Attempt to convert from special move.
-    fn from_special(special: Option<SpecialMove>) -> Option<Self> {
+    pub fn from_special(special: Option<SpecialMove>) -> Option<Self> {
         let special = special?;
         if SpecialMove::KNIGHT <= special && special <= SpecialMove::QUEEN {
             Some(unsafe { std::mem::transmute(special) })
@@ -496,7 +496,7 @@ impl PawnPromotion {
 
 impl CastlingDirection {
     /// Attempt to convert from special move.
-    fn from_special(special: Option<SpecialMove>) -> Option<Self> {
+    pub fn from_special(special: Option<SpecialMove>) -> Option<Self> {
         let special = special?;
         if SpecialMove::EAST <= special {
             Some(unsafe { std::mem::transmute(special as u8 - SpecialMove::EAST as u8) })

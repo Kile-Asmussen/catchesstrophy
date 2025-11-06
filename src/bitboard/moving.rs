@@ -22,13 +22,12 @@ use std::{hash::Hash, marker::PhantomData};
 use strum::VariantArray;
 
 use crate::bitboard::{
-    ChessMove, CastlingDirection, ChessColor, ChessEchelon, ChessPawn, ChessPiece, EnPassant,
-    LegalMove, PawnPromotion, PseudoLegal, SpecialMove, Square, Transients,
     board::{BitBoard, ChessBoard, MetaBoard},
-    castling::{CLASSIC_CASTLING, BitCastling},
+    castling::BitCastling,
     hash::{NoHashes, ZobristTables},
-    notation::{AlgNotaion, CoordNotation},
 };
+
+use crate::model::*;
 
 /// Make a legal move on a bitboard given a Zobrist hashing table
 ///
@@ -140,20 +139,20 @@ pub fn simple_move<BB: BitBoard, ZT: ZobristTables>(
 #[inline]
 pub fn rook_rights_loss<BB: BitBoard, ZT: ZobristTables>(
     board: &mut BB,
-    piece: ChessEchelon,
+    piece: ChessPiece,
     color: ChessColor,
     sq: Square,
     zobristhashes: &'static ZT,
 ) {
     use CastlingDirection::*;
-    if piece != ChessEchelon::ROOK {
+    if piece != ChessPiece::ROOK {
         return;
     }
 
     let castling = board.castling();
 
     for dir in [EAST, WEST] {
-        if sq == castling.rook_start[color.ix()][dir.ix()] {
+        if sq == castling.rules.rook_start[color.ix()][dir.ix()] {
             let mut rights = board.trans().rights;
 
             board.hash(zobristhashes.hash_rights(rights));
@@ -183,7 +182,7 @@ pub fn capturing_move<BB: BitBoard, ZT: ZobristTables>(
         return;
     };
 
-    let man = ChessEchelon::from(man);
+    let man = ChessPiece::from(man);
 
     board.set_halfmove_clock(0);
     board.xor(opponent, man, 1 << sq.ix());
@@ -210,7 +209,7 @@ pub fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
     let en_passant = board.trans().en_passant;
 
     board.set_en_passant(None);
-    if mv.ech == ChessEchelon::PAWN {
+    if mv.ech == ChessPiece::PAWN {
         board.set_halfmove_clock(0);
     }
 
@@ -222,9 +221,9 @@ pub fn pawn_special<BB: BitBoard, ZT: ZobristTables>(
 
     let bits = 1 << mv.from.ix() | 1 << mv.to.ix();
 
-    board.xor(player, ChessEchelon::PAWN, bits);
+    board.xor(player, ChessPiece::PAWN, bits);
 
-    board.hash(zobristhashes.hash_move(player, ChessEchelon::PAWN, bits));
+    board.hash(zobristhashes.hash_move(player, ChessPiece::PAWN, bits));
 
     if let Some(en_passant) = en_passant {
         capturing_move(board, mv, en_passant.capture, zobristhashes);
@@ -258,14 +257,14 @@ pub fn promotion_move<BB: BitBoard, ZT: ZobristTables>(
     let Some(prom) = PawnPromotion::from_special(mv.special) else {
         return;
     };
-    let prom = ChessEchelon::from(prom);
+    let prom = ChessPiece::from(prom);
 
-    board.xor(player, ChessEchelon::PAWN, 1 << mv.from.ix());
+    board.xor(player, ChessPiece::PAWN, 1 << mv.from.ix());
     board.xor(player, prom, 1 << mv.to.ix());
 
     capturing_move(board, mv, mv.to, zobristhashes);
 
-    board.hash(zobristhashes.hash_square(player, ChessEchelon::PAWN, mv.from));
+    board.hash(zobristhashes.hash_square(player, ChessPiece::PAWN, mv.from));
     board.hash(zobristhashes.hash_square(player, prom, mv.to));
 }
 
@@ -301,8 +300,8 @@ pub fn castling_move<BB: BitBoard, ZT: ZobristTables>(
     board.hash(zobristhashes.hash_rights(rights));
 
     board.set_halfmove_clock(board.trans().halfmove_clock + 1);
-    board.xor(player, ChessEchelon::KING, king_move);
-    board.xor(player, ChessEchelon::ROOK, rook_move);
+    board.xor(player, ChessPiece::KING, king_move);
+    board.xor(player, ChessPiece::ROOK, rook_move);
     board.set_castling_rights(rights);
 
     board.hash(zobristhashes.hash_castling(player, king_move, rook_move));
@@ -388,12 +387,12 @@ impl<'a, BB: BitBoard> ChessBoard for MoveOnly<'a, BB> {
 
 impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     #[inline]
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64) {
         self.0.xor(color, ech, mask);
     }
 
     #[inline]
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64 {
         0
     }
 
@@ -408,7 +407,7 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     }
 
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
         None
     }
 
@@ -418,7 +417,7 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     }
 
     #[inline]
-    fn comm_at(&self, sq: Square) -> Option<super::ChessCommoner> {
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
         None
     }
 }
@@ -484,7 +483,7 @@ impl ChessBoard for HashOnly {
             0,
             Transients::startpos(),
             ChessColor::WHITE,
-            &CLASSIC_CASTLING,
+            &BitCastling::STANDARD,
         )
     }
 
@@ -498,16 +497,21 @@ impl ChessBoard for HashOnly {
 
     #[inline]
     fn empty() -> Self {
-        Self(0, Transients::empty(), ChessColor::WHITE, &CLASSIC_CASTLING)
+        Self(
+            0,
+            Transients::empty(),
+            ChessColor::WHITE,
+            &BitCastling::STANDARD,
+        )
     }
 }
 
 impl BitBoard for HashOnly {
     #[inline]
-    fn xor(&mut self, color: ChessColor, ech: ChessEchelon, mask: u64) {}
+    fn xor(&mut self, color: ChessColor, ech: ChessPiece, mask: u64) {}
 
     #[inline]
-    fn men(&self, color: ChessColor, ech: ChessEchelon) -> u64 {
+    fn men(&self, color: ChessColor, ech: ChessPiece) -> u64 {
         0
     }
 
@@ -522,7 +526,7 @@ impl BitBoard for HashOnly {
     }
 
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessEchelon> {
+    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
         None
     }
 
@@ -532,7 +536,7 @@ impl BitBoard for HashOnly {
     }
 
     #[inline]
-    fn comm_at(&self, sq: Square) -> Option<super::ChessCommoner> {
-        self.ech_at(sq).and_then(super::ChessCommoner::from_echelon)
+    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.ech_at(sq).and_then(ChessCommoner::from_echelon)
     }
 }

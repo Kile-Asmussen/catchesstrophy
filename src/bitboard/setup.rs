@@ -14,12 +14,11 @@
 use strum::VariantArray;
 
 use crate::{
+    bitboard::{board::BitBoard, utils::SliceExtensions, vision::SimplePanopticon},
     biterate,
-    bitboard::{
-        ChessColor, ChessEchelon, ChessMan, Square, board::BitBoard, utils::SliceExtensions,
-        vision::SimplePanopticon,
-    },
 };
+
+use crate::model::*;
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]

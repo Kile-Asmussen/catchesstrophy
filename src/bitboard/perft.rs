@@ -6,15 +6,17 @@ use std::{
 
 use rand::{RngCore, rngs::SmallRng};
 
-use crate::bitboard::{
-    LegalMove, Transients,
-    board::BitBoard,
-    hash::{ZobHasher, ZobristTables, pi_rng},
-    movegen::{BlessingStrategy, enumerate},
-    moving::{clone_make_legal_move, make_legal_move, unmake_legal_move},
+use crate::{
+    bitboard::{
+        board::BitBoard,
+        hash::{ZobHasher, ZobristTables, pi_rng},
+        movegen::{BlessingStrategy, enumerate},
+        moving::{clone_make_legal_move, make_legal_move, unmake_legal_move},
+        utils::SliceExtensions,
+        vision::Panopticon,
+    },
+    model::{LegalMove, Transients},
     notation::CoordNotation,
-    utils::SliceExtensions,
-    vision::Panopticon,
 };
 
 pub fn perft<
@@ -49,7 +51,7 @@ pub fn perft<
                 let mut rec = RC::recurse::<BB, ZT>(&mut startpos, mv);
                 enumerate::<BB, X, L>(&mut *rec, &mut buf);
                 breakdown.insert(
-                    CoordNotation::from(mv.0),
+                    mv.0.into(),
                     perft_recurse::<BB, X, L, RC, ZT>(
                         depth - 1,
                         &mut *rec,

@@ -251,7 +251,7 @@ impl ChessBoard for DefaultMetaBoard {
     /// in both directtions for both players.
     fn startpos<ZT: ZobristTables>() -> Self {
         let mut res = Self {
-            castling: &BitCastling::CLASSIC_CASTLING,
+            castling: &BitCastling::STANDARD,
             hash: 0,
             player: ChessColor::WHITE,
             turn: 1,
@@ -279,7 +279,7 @@ impl ChessBoard for DefaultMetaBoard {
     /// Empty chessboard
     fn empty() -> Self {
         Self {
-            castling: &BitCastling::CLASSIC_CASTLING,
+            castling: &BitCastling::STANDARD,
             hash: 0,
             turn: 1,
             player: ChessColor::WHITE,

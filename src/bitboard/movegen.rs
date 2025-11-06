@@ -1,15 +1,14 @@
 use std::marker::PhantomData;
 
 use crate::bitboard::{
-    ChessMove, CastlingDirection, ChessColor, ChessCommoner, ChessEchelon, ChessPiece, EnPassant,
-    LegalMove, PseudoLegal, SpecialMove, Square,
     attacking::{AttackMaskGenerator, AttackMaskStrategy, Attacks},
     board::BitBoard,
     castling,
-    notation::show_mask,
     utils::biterate,
     vision::{Panopticon, PawnVision, PieceVision, Vision},
 };
+
+use crate::model::*;
 
 pub trait BlessingStrategy {
     type Blessing;
@@ -119,14 +118,14 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
         ChessColor::WHITE => pawn_moves(
             board,
             &blesser,
-            board.men(player, ChessEchelon::PAWN),
+            board.men(player, ChessPiece::PAWN),
             pan.white_pawn(),
             buffer,
         ),
         ChessColor::BLACK => pawn_moves(
             board,
             &blesser,
-            board.men(player, ChessEchelon::PAWN),
+            board.men(player, ChessPiece::PAWN),
             pan.black_pawn(),
             buffer,
         ),
@@ -135,7 +134,7 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     piece_moves(
         board,
         &blesser,
-        board.men(player, ChessEchelon::KNIGHT),
+        board.men(player, ChessPiece::KNIGHT),
         friendly,
         pan.knight(),
         buffer,
@@ -144,7 +143,7 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     piece_moves(
         board,
         &blesser,
-        board.men(player, ChessEchelon::BISHOP),
+        board.men(player, ChessPiece::BISHOP),
         friendly,
         pan.bishop(),
         buffer,
@@ -153,7 +152,7 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     piece_moves(
         board,
         &blesser,
-        board.men(player, ChessEchelon::ROOK),
+        board.men(player, ChessPiece::ROOK),
         friendly,
         pan.rook(),
         buffer,
@@ -162,7 +161,7 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     piece_moves(
         board,
         &blesser,
-        board.men(player, ChessEchelon::QUEEN),
+        board.men(player, ChessPiece::QUEEN),
         friendly,
         pan.queen(),
         buffer,
@@ -171,7 +170,7 @@ pub fn enumerate<'a, BB: BitBoard, X: Panopticon, L: BlessingStrategy>(
     piece_moves(
         board,
         &blesser,
-        board.men(player, ChessEchelon::KING),
+        board.men(player, ChessPiece::KING),
         friendly,
         pan.king(),
         buffer,
@@ -194,7 +193,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
         biterate! {for to in pawn_vision.push(from); {
             let mut mv = ChessMove {
                 from, to,
-                ech: ChessEchelon::PAWN,
+                ech: ChessPiece::PAWN,
                 special: None,
                 capture: None
             };
@@ -209,7 +208,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
         biterate! {for to in pawn_vision.hits(from, enemy); {
             let mut mv = ChessMove {
                 from, to,
-                ech: ChessEchelon::PAWN,
+                ech: ChessPiece::PAWN,
                 special: None,
                 capture: board.comm_at(to),
             };
@@ -255,7 +254,7 @@ fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
         biterate! {for to in piece.hits(from, friendly); {
             let mut mv = ChessMove {
                 from, to,
-                ech: ChessEchelon::from(P::ID),
+                ech: ChessPiece::from(P::ID),
                 special: None,
                 capture: board.comm_at(to),
             };
@@ -287,9 +286,9 @@ fn castling_move<'a, BB: BitBoard, L: MoveBlesser<'a, BB>>(
         }
 
         let mv = ChessMove {
-            from: castling.king_start[player.ix()],
-            to: castling.king_end[player.ix()][dir.ix()],
-            ech: ChessEchelon::KING,
+            from: castling.rules.king_start[player.ix()],
+            to: castling.rules.king_end[player.ix()][dir.ix()],
+            ech: ChessPiece::KING,
             special: Some(SpecialMove::from(dir)),
             capture: None,
         };

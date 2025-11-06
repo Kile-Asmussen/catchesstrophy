@@ -3,39 +3,9 @@
 /// Here be ~~dragons~~ SIMD instructions.
 use std::simd::{num::SimdUint, u64x2, u64x4};
 
-use crate::bitboard::{
-    notation::show_mask,
-    vision::{PawnVision, PawnsBitBlit, Vision},
-};
+use crate::bitboard::vision::{PawnVision, PawnsBitBlit, Vision};
 
 use crate::model::*;
-
-#[test]
-fn test() {
-    println!("{}", show_mask(queen_diff_obs_simdx4(Square::d4, 0)));
-    println!();
-    println!("{}", show_mask(bishop_diff_obs_simdx2(Square::d4, 0)));
-    println!();
-    println!("{}", show_mask(rook_diff_obs_simdx2(Square::d4, 0)));
-    println!();
-    println!(
-        "{}",
-        show_mask(rook_diff_obs_simdx2(Square::d4, 0) | bishop_diff_obs_simdx2(Square::d4, 0))
-    );
-    println!();
-    println!("{}", show_mask(king_dumbfill_simdx4(1 << Square::d4 as u8)));
-    println!();
-    println!(
-        "{}",
-        show_mask(knight_dumbfill_simdx4(1 << Square::d4 as u8))
-    );
-
-    let d2 = 1 << Square::d2 as u8;
-    println!(
-        "{}",
-        show_mask(PawnsBitBlit::<true>::new(0xF7_0000 | d2).hits(Square::d2, 0xF7_0000))
-    );
-}
 
 /// Compute all the squares attacked by a queen using the [`diff_obs_simdx4`] function.
 ///
@@ -146,18 +116,6 @@ pub fn king_dumbfill_simdx4(mask: u64) -> u64 {
     (u64x4::splat(mask) << shift & wrap_shl | u64x4::splat(mask) >> shift & wrap_slr).reduce_or()
 }
 
-#[test]
-fn king_fill() {
-    let mut n = 1;
-    for i in 0.. {
-        println!("{i}\n{}", show_mask(n));
-        if n == u64::MAX {
-            break;
-        }
-        n |= king_dumbfill_simdx4(n);
-    }
-}
-
 /// Computes all 8 directions a knight can move in two operations, using SIMD instructions.
 #[inline]
 pub fn knight_dumbfill_simdx4(mask: u64) -> u64 {
@@ -169,18 +127,6 @@ pub fn knight_dumbfill_simdx4(mask: u64) -> u64 {
         !0x0303_0303_0303_0303,
     ]);
     (u64x4::splat(mask) << shift & wrap | u64x4::splat(mask) >> shift & wrap.reverse()).reduce_or()
-}
-
-#[test]
-fn knight_fill() {
-    let mut n = 1;
-    for i in 0.. {
-        println!("{i}\n{}", show_mask(n));
-        if n == u64::MAX {
-            break;
-        }
-        n |= knight_dumbfill_simdx4(n);
-    }
 }
 
 /// The dumb7fill algorithm for rooks.

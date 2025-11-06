@@ -11,7 +11,7 @@ pub struct BitCastling {
 }
 
 impl BitCastling {
-    pub const CLASSIC_CASTLING: BitCastling = BitCastling {
+    pub const STANDARD: BitCastling = BitCastling {
         rook_move: [0xA000_0000_0000_00A0, 0x0900_0000_0000_0009],
         king_move: [0x5000_0000_0000_0050, 0x1400_0000_0000_0014],
         safety: [0x7000_0000_0000_0070, 0x1C00_0000_0000_001C],

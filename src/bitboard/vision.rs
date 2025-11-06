@@ -1,14 +1,12 @@
+use crate::model::*;
 use std::marker::PhantomData;
 
 use crate::{
-    bitboard::{
-        ChessColor, ChessPiece, Square,
-        binary::{
-            bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
-            black_pawn_attack_fill_simdx2, king_dumbfill_simdx4, knight_dumbfill_simdx4,
-            queen_diff_obs_simdx4, rook_diff_obs_simdx2, white_pawn_advance_fill,
-            white_pawn_attack_fill, white_pawn_attack_fill_simdx2,
-        },
+    bitboard::binary::{
+        bishop_diff_obs_simdx2, black_pawn_advance_fill, black_pawn_attack_fill,
+        black_pawn_attack_fill_simdx2, king_dumbfill_simdx4, knight_dumbfill_simdx4,
+        queen_diff_obs_simdx4, rook_diff_obs_simdx2, white_pawn_advance_fill,
+        white_pawn_attack_fill, white_pawn_attack_fill_simdx2,
     },
     biterate,
 };

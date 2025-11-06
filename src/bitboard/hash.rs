@@ -184,10 +184,10 @@ pub trait ZobristTables: ZobristDetails + 'static {
     /// - `bits` - this bit mask denotes the updated squares, and by the nature of
     /// Zobrist hashing it is irrelevant which squares the chessmen move to
     /// and from.
-    fn hash_move(&self, player: ChessColor, man: ChessEchelon, bits: u64) -> u64;
+    fn hash_move(&self, player: ChessColor, man: ChessPiece, bits: u64) -> u64;
 
     /// Hash a single square instead of a full mask.
-    fn hash_square(&self, player: ChessColor, man: ChessEchelon, sq: Square) -> u64;
+    fn hash_square(&self, player: ChessColor, man: ChessPiece, sq: Square) -> u64;
 
     /// Hash a castling move.
     fn hash_castling(&self, player: ChessColor, king_bits: u64, rook_bits: u64) -> u64;
@@ -244,7 +244,7 @@ impl CompactZobristTables {
 
     /// Hash a mask of the chessmen of a given echelon regardless of color.
     #[inline]
-    fn hash_man_mask(&self, man: ChessEchelon, mask: u64) -> u64 {
+    fn hash_man_mask(&self, man: ChessPiece, mask: u64) -> u64 {
         let mut res = 0;
         biterate! {for sq in mask; {
             res ^= self.men[man.ix()][sq as usize & 0x3F];
@@ -266,17 +266,17 @@ impl ZobristTables for CompactZobristTables {
         &COMPACT_ZOBRIST
     }
 
-    fn hash_move(&self, player: ChessColor, man: ChessEchelon, bits: u64) -> u64 {
+    fn hash_move(&self, player: ChessColor, man: ChessPiece, bits: u64) -> u64 {
         self.hash_color_mask(player, bits) ^ self.hash_man_mask(man, bits)
     }
 
-    fn hash_square(&self, player: ChessColor, man: ChessEchelon, sq: Square) -> u64 {
+    fn hash_square(&self, player: ChessColor, man: ChessPiece, sq: Square) -> u64 {
         self.men[man.ix()][sq.ix()] ^ self.colors[player.ix()][sq.ix()]
     }
 
     fn hash_castling(&self, player: ChessColor, king_bits: u64, rook_bits: u64) -> u64 {
-        self.hash_man_mask(ChessEchelon::KING, king_bits)
-            ^ self.hash_man_mask(ChessEchelon::ROOK, rook_bits)
+        self.hash_man_mask(ChessPiece::KING, king_bits)
+            ^ self.hash_man_mask(ChessPiece::ROOK, rook_bits)
             ^ self.hash_color_mask(player, king_bits | rook_bits)
     }
 
@@ -286,7 +286,7 @@ impl ZobristTables for CompactZobristTables {
         res ^= self.hash_color_mask(ChessColor::WHITE, bitor_sum(&masks[ChessColor::WHITE.ix()]));
         res ^= self.hash_color_mask(ChessColor::BLACK, bitor_sum(&masks[ChessColor::BLACK.ix()]));
 
-        for man in ChessEchelon::VARIANTS {
+        for man in ChessPiece::VARIANTS {
             res ^= self.hash_man_mask(
                 *man,
                 masks[ChessColor::WHITE.ix()][man.ix()] | masks[ChessColor::WHITE.ix()][man.ix()],
@@ -299,7 +299,7 @@ impl ZobristTables for CompactZobristTables {
     /// Hashing a compact bitboard is more efficient in this implementation.
     fn hash_compact(&self, colors: &[u64; 2], men: &[u64; 6]) -> u64 {
         let mut res = 0;
-        for man in ChessEchelon::VARIANTS {
+        for man in ChessPiece::VARIANTS {
             res ^= self.hash_man_mask(*man, men[man.ix()]);
         }
 
@@ -347,7 +347,7 @@ impl FullZobristTables {
 
     /// Hash a mask of particular color and echelon of chess men.
     #[inline]
-    fn hash_mask(&self, color: ChessColor, man: ChessEchelon, mut mask: u64) -> u64 {
+    fn hash_mask(&self, color: ChessColor, man: ChessPiece, mut mask: u64) -> u64 {
         let mut res = 0;
         let board = self.masks[color.ix()][man.ix()];
         biterate! {for sq in mask; {
@@ -365,19 +365,19 @@ impl ZobristTables for FullZobristTables {
     }
 
     #[inline]
-    fn hash_move(&self, player: ChessColor, man: ChessEchelon, bits: u64) -> u64 {
+    fn hash_move(&self, player: ChessColor, man: ChessPiece, bits: u64) -> u64 {
         self.hash_mask(player, man, bits)
     }
 
     #[inline]
-    fn hash_square(&self, player: ChessColor, man: ChessEchelon, sq: Square) -> u64 {
+    fn hash_square(&self, player: ChessColor, man: ChessPiece, sq: Square) -> u64 {
         self.masks[player.ix()][man.ix()][sq.ix()]
     }
 
     #[inline]
     fn hash_castling(&self, player: ChessColor, king_bits: u64, rook_bits: u64) -> u64 {
-        self.hash_mask(player, ChessEchelon::KING, king_bits)
-            ^ self.hash_mask(player, ChessEchelon::ROOK, rook_bits)
+        self.hash_mask(player, ChessPiece::KING, king_bits)
+            ^ self.hash_mask(player, ChessPiece::ROOK, rook_bits)
     }
 
     /// Hashing a full bitboard is more efficient in this implementation.
@@ -385,7 +385,7 @@ impl ZobristTables for FullZobristTables {
     fn hash_full_bitboard(&self, masks: &[[u64; 6]; 2]) -> u64 {
         let mut res = 0;
         for c in [ChessColor::WHITE, ChessColor::BLACK] {
-            for m in ChessEchelon::VARIANTS {
+            for m in ChessPiece::VARIANTS {
                 res ^= self.hash_mask(c, *m, masks[c.ix()][m.ix()]);
             }
         }
@@ -397,7 +397,7 @@ impl ZobristTables for FullZobristTables {
     fn hash_compact(&self, colors: &[u64; 2], men: &[u64; 6]) -> u64 {
         let mut res = 0;
         for c in [ChessColor::WHITE, ChessColor::BLACK] {
-            for m in ChessEchelon::VARIANTS {
+            for m in ChessPiece::VARIANTS {
                 res ^= self.hash_mask(c, *m, colors[c.ix()] & men[m.ix()]);
             }
         }
@@ -438,11 +438,11 @@ impl ZobristTables for NoHashes {
         0
     }
 
-    fn hash_move(&self, player: ChessColor, man: ChessEchelon, bits: u64) -> u64 {
+    fn hash_move(&self, player: ChessColor, man: ChessPiece, bits: u64) -> u64 {
         0
     }
 
-    fn hash_square(&self, player: ChessColor, man: ChessEchelon, sq: Square) -> u64 {
+    fn hash_square(&self, player: ChessColor, man: ChessPiece, sq: Square) -> u64 {
         0
     }
 

@@ -3,7 +3,6 @@
 #![feature(duration_millis_float)]
 
 use crate::bitboard::{
-    ChessMan, PseudoLegal, Square,
     attacking::FakeMoveSimplStrategy,
     board::{BitBoard, ChessBoard, CompactBitBoard, FullBitBoard, FullerBitBoard},
     hash::{CompactZobristTables, FullZobristTables},
@@ -49,3 +48,4 @@ fn main_perft() {
 /// Modeling the game of chess.
 pub mod bitboard;
 pub mod model;
+pub mod notation;
