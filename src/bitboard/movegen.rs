@@ -210,7 +210,7 @@ pub fn pawn_moves<'a, P: PawnVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
                 from, to,
                 ech: ChessPiece::PAWN,
                 special: None,
-                capture: board.comm_at(to),
+                capture: board.commoner_at(to),
             };
 
             if mv.capture.is_none() {
@@ -256,7 +256,7 @@ fn piece_moves<'a, P: PieceVision, BB: BitBoard, L: MoveBlesser<'a, BB>>(
                 from, to,
                 ech: ChessPiece::from(P::ID),
                 special: None,
-                capture: board.comm_at(to),
+                capture: board.commoner_at(to),
             };
 
             blesser.bless_into(board, mv, buffer);

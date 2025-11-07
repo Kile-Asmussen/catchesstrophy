@@ -407,7 +407,7 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     }
 
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece> {
         None
     }
 
@@ -417,7 +417,7 @@ impl<'a, BB: BitBoard> BitBoard for MoveOnly<'a, BB> {
     }
 
     #[inline]
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
         None
     }
 }
@@ -526,7 +526,7 @@ impl BitBoard for HashOnly {
     }
 
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece> {
         None
     }
 
@@ -536,7 +536,7 @@ impl BitBoard for HashOnly {
     }
 
     #[inline]
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
-        self.ech_at(sq).and_then(ChessCommoner::from_echelon)
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.piece_at(sq).and_then(ChessCommoner::from_piece)
     }
 }

@@ -6,11 +6,8 @@ use strum::{EnumIs, VariantArray, VariantNames};
 /// squares starting with a1 = 0 and then counting
 /// up over the files first, b1 = 1, c1 = 2, ... and then the
 /// ranks, a2 = 8, a3 = 16, ... ending with h8 = 63.
-/// 
-/// This '64' numbering scheme is chosen rather than the '0x88'
-/// numbering scheme because `catchesstropy` uses a bitboard
-/// representation of the chessboard, where numbers in the range
-/// 0-63 are useful in bit arithmetic and in array indexing.
+///
+/// This is the so called file-major little-endian layout.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
      VariantNames)]
@@ -41,6 +38,17 @@ impl Square {
         unsafe { std::mem::transmute::<u8, Square>(ix & 0x3Fu8) }
     }
 
+    /// Split a square into file and rank
+    #[inline]
+    pub fn split(self) -> (BoardFile, BoardRank) {
+        unsafe {
+            (
+                std::mem::transmute(self as u8 & 0x7),
+                std::mem::transmute((self as u8 & 0x38) >> 3),
+            )
+        }
+    }
+
     /// Mirror chessboard north to south
     #[inline]
     pub fn mirror_ns(self) -> Self {
@@ -60,6 +68,8 @@ impl Square {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
 enum BoardRank {
     _1 = 0,
     _2 = 1,
@@ -71,7 +81,17 @@ enum BoardRank {
     _8 = 7,
 }
 
+impl BoardRank {
+    /// Use this rank as an array index.
+    #[inline]
+    pub fn ix(self) -> usize {
+        (self as usize) << 3
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(non_camel_case_types)]
+#[repr(u8)]
 enum BoardFile {
     a_ = 0,
     b_ = 1,
@@ -81,6 +101,14 @@ enum BoardFile {
     f_ = 5,
     g_ = 6,
     h_ = 7,
+}
+
+impl BoardFile {
+    /// Use this file as an array index.
+    #[inline]
+    pub fn ix(self) -> usize {
+        self as usize
+    }
 }
 
 /// Representation of a chessman.
@@ -98,42 +126,18 @@ enum BoardFile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, VariantArray, Hash)]
 #[repr(i8)]
 pub enum ChessMan {
-    /// ♚
     BLACK_KING = -6,
-    /// ♛
     BLACK_QUEEN = -5,
-    /// ♜
     BLACK_ROOK = -4,
-    /// ♝
     BLACK_BISHOP = -3,
-    /// ♞
     BLACK_KNIGHT = -2,
-    /// ♟
     BLACK_PAWN = -1,
-    /// ♙
     WHITE_PAWN = 1,
-    /// ♘
     WHITE_KNIGHT = 2,
-    /// ♗
     WHITE_BISHOP = 3,
-    /// ♖
     WHITE_ROOK = 4,
-    /// ♕
     WHITE_QUEEN = 5,
-    /// ♔
     WHITE_KING = 6,
-}
-
-impl ChessMan {
-    /// The associated colorless piece type of a chessman.
-    pub fn ech(self) -> ChessPiece {
-        ChessPiece::from(self)
-    }
-
-    /// The color of the chessman in question.
-    pub fn col(self) -> ChessColor {
-        ChessColor::from(self)
-    }
 }
 
 /// Representation of color of a player or chessman.
@@ -188,7 +192,7 @@ impl From<ChessMan> for ChessColor {
 /// The discriminant values of this enum are the absolute
 /// values of the [`ChessMan`] enum, or equivalently, the white chessmen.
 ///
-/// This enum is used _far_ mo re extensively than
+/// This enum is used _far_ more extensively than
 /// its parent enum, on account of most of the implementation
 /// relying on arrays of length six to represent information about
 /// each rank of chessmen.
@@ -254,7 +258,7 @@ impl From<ChessCommoner> for ChessPiece {
     }
 }
 
-/// Representation of the chess pawn echelon.
+/// Representation of the chess pawn, i.e. not an officer.
 ///
 /// Mostly included for completeness' sake.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -317,7 +321,7 @@ impl ChessCommoner {
     }
 
     #[inline]
-    pub fn from_echelon(ech: ChessPiece) -> Option<Self> {
+    pub fn from_piece(ech: ChessPiece) -> Option<Self> {
         if ech == ChessPiece::KING {
             None
         } else {
@@ -395,9 +399,9 @@ pub enum CompassRose {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CastlingDirection {
-    /// The 'long' or 'queen-side' castling.
+    /// Aka. the 'long' or 'queen-side' castling.
     EAST = 0,
-    /// The 'short' or 'king-side' castling.
+    /// Aka. the 'short' or 'king-side' castling.
     WEST = 1,
 }
 
@@ -411,6 +415,7 @@ impl CastlingDirection {
 
 /// Subset inclusion (with mapping.)
 impl From<CastlingDirection> for CompassRose {
+    #[inline]
     fn from(value: CastlingDirection) -> Self {
         match value {
             CastlingDirection::EAST => Self::EAST,

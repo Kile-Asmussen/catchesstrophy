@@ -44,11 +44,11 @@ pub trait BitBoard: ChessBoard {
     fn men(&self, color: ChessColor, ech: ChessPiece) -> u64;
 
     /// Determine if a chessman of some echelon stands on a square
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece>;
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece>;
 
     /// Determine if a chessman of some non-king echelon stands on a square
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
-        self.ech_at(sq).and_then(ChessCommoner::from_echelon)
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.piece_at(sq).and_then(ChessCommoner::from_piece)
     }
 
     /// Retrieve the bitboard represeting the squares occuipied by all the chessmen of one color.
@@ -386,7 +386,7 @@ impl BitBoard for CompactBitBoard {
     }
 
     /// Very efficiently computed as there are only 6 masks to check
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece> {
         let bit = 1 << sq.ix();
         for c in ChessPiece::VARIANTS.clones() {
             if (self.ech[c.ix()] & bit) != 0 {
@@ -397,7 +397,7 @@ impl BitBoard for CompactBitBoard {
     }
 
     /// Very efficiently computed as there are only 6 masks to check
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
         let bit = 1 << sq.ix();
         for c in ChessCommoner::VARIANTS.clones() {
             if (self.ech[c.ix()] & bit) != 0 {
@@ -559,7 +559,7 @@ impl BitBoard for FullBitBoard {
     }
 
     /// Not so efficiently computed as there are twelve masks to check
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece> {
         let bit = 1 << sq.ix();
         for c in ChessPiece::VARIANTS.clones() {
             if (self.masks[ChessColor::WHITE.ix()][c.ix()] & bit) != 0
@@ -572,7 +572,7 @@ impl BitBoard for FullBitBoard {
     }
 
     /// Not so efficiently computed as there are ten masks to check
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
         let bit = 1 << sq.ix();
         for c in ChessCommoner::VARIANTS.clones() {
             if (self.masks[ChessColor::WHITE.ix()][c.ix()] & bit) != 0
@@ -700,14 +700,14 @@ impl BitBoard for FullerBitBoard {
 
     /// Delegated
     #[inline]
-    fn ech_at(&self, sq: Square) -> Option<ChessPiece> {
-        self.bitboard.ech_at(sq)
+    fn piece_at(&self, sq: Square) -> Option<ChessPiece> {
+        self.bitboard.piece_at(sq)
     }
 
     /// Delegated
     #[inline]
-    fn comm_at(&self, sq: Square) -> Option<ChessCommoner> {
-        self.bitboard.comm_at(sq)
+    fn commoner_at(&self, sq: Square) -> Option<ChessCommoner> {
+        self.bitboard.commoner_at(sq)
     }
 
     /// Delegated

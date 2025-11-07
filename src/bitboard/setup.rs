@@ -56,7 +56,7 @@ impl SimpleBoard<Option<ChessMan>> {
         let mut res = Self([None; 64]);
 
         for cm in ChessMan::VARIANTS.clones() {
-            res.set_mask(bb.men(cm.col(), cm.ech()), |_| Some(cm));
+            res.set_mask(bb.men(cm.into(), cm.into()), |_| Some(cm));
         }
 
         res
@@ -66,7 +66,7 @@ impl SimpleBoard<Option<ChessMan>> {
         let mut bb = BB::empty();
 
         for cm in ChessMan::VARIANTS.clones() {
-            bb.xor(cm.col(), cm.ech(), self.mask(|sq, x| x == &Some(cm)));
+            bb.xor(cm.into(), cm.into(), self.mask(|sq, x| x == &Some(cm)));
         }
 
         bb

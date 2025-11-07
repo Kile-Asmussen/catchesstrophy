@@ -1,6 +1,7 @@
 #![allow(unused)]
 #![feature(portable_simd)]
 #![feature(duration_millis_float)]
+#![feature(format_args_nl)]
 
 use crate::bitboard::{
     attacking::FakeMoveSimplStrategy,
@@ -49,3 +50,4 @@ fn main_perft() {
 pub mod bitboard;
 pub mod model;
 pub mod notation;
+pub mod utils;
