@@ -86,6 +86,8 @@ pub enum BoardRank {
 }
 
 impl BoardRank {
+    pub const VARIANTS: &'static [&'static str] = &["1", "2", "3", "4", "5", "6", "7", "8"];
+
     /// Use this rank as an array index.
     #[inline]
     pub fn ix(self) -> usize {
@@ -115,6 +117,8 @@ pub enum BoardFile {
 }
 
 impl BoardFile {
+    pub const VARIANTS: &'static [&'static str] = &["a", "b", "c", "d", "e", "f", "g", "h"];
+
     /// Use this file as an array index.
     #[inline]
     pub fn ix(self) -> usize {
@@ -414,7 +418,7 @@ pub enum CompassRose {
 /// The naming convention is chosen to account for Chess960
 /// and Chess480, wherein the rook's relative position to the
 /// king is not fixed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum CastlingDirection {
     /// Aka. the 'long' or 'queen-side' castling.
@@ -753,5 +757,26 @@ impl CastlingRules {
 
     pub fn chess_960(starting_array: [ChessOfficer; 8]) -> Self {
         todo!()
+    }
+}
+
+/// Data for each square on the board
+///
+/// This is the basis of the simple and most obvious representation,
+/// using a separate value in an array for each square, a so-called
+/// 'board'-centric representation, which is `DataBoard<Option<ChessMan>>`
+///
+/// This is a generalized version allowing any values, not just
+/// chessmen to fill the squares, which can be used for a variety
+/// of purposes, such as conveniently setting up positions for more advanced
+/// board representations.
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct DataBoard<T>(pub [T; 64]);
+
+impl<T> DataBoard<T> {
+    /// Write to a square
+    pub fn set(&mut self, sq: Square, it: T) {
+        self.0[sq.ix()] = it
     }
 }

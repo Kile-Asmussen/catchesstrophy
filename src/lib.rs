@@ -9,7 +9,6 @@ use crate::bitboard::{
     hash::{CompactZobristTables, FullZobristTables},
     movegen::{BlessingStrategy, LegalBlessing, NoBlessing, enumerate},
     perft::{CloneMake, HashMapMemo, MakeUnmake, perft},
-    setup::SimpleBoard,
     vision::{MostlyBits, Panopticon},
 };
 

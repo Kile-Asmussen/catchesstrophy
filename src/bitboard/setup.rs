@@ -20,11 +20,7 @@ use crate::{
 
 use crate::model::*;
 
-#[derive(Debug, Clone)]
-#[repr(transparent)]
-pub struct SimpleBoard<T>(pub [T; 64]);
-
-impl<T> SimpleBoard<T> {
+impl<T> DataBoard<T> {
     /// Obtain a bit mask representing which squares the predicate
     /// returns true for.
     pub fn mask(&self, mut p: impl FnMut(Square, &T) -> bool) -> u64 {
@@ -37,11 +33,6 @@ impl<T> SimpleBoard<T> {
         res
     }
 
-    /// Write to a square
-    pub fn set(&mut self, sq: Square, it: T) {
-        self.0[sq.ix()] = it
-    }
-
     /// Assign values to all squares for which a bit is set in the given mask.
     pub fn set_mask(&mut self, mask: u64, mut v: impl FnMut(Square) -> T) {
         biterate! {for sq in mask; {
@@ -50,7 +41,7 @@ impl<T> SimpleBoard<T> {
     }
 }
 
-impl SimpleBoard<Option<ChessMan>> {
+impl DataBoard<Option<ChessMan>> {
     /// Set up a mailbox board from a bitboard.
     pub fn from_bitboard<BB: BitBoard>(bb: &BB) -> Self {
         let mut res = Self([None; 64]);
