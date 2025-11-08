@@ -1,5 +1,7 @@
 #![allow(unused)]
 #![feature(portable_simd)]
+#![feature(new_range_api)]
+#![feature(bound_copied)]
 #![feature(duration_millis_float)]
 #![feature(format_args_nl)]
 

@@ -770,7 +770,7 @@ impl CastlingRules {
 /// chessmen to fill the squares, which can be used for a variety
 /// of purposes, such as conveniently setting up positions for more advanced
 /// board representations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DataBoard<T>(pub [T; 64]);
 
@@ -778,5 +778,11 @@ impl<T> DataBoard<T> {
     /// Write to a square
     pub fn set(&mut self, sq: Square, it: T) {
         self.0[sq.ix()] = it
+    }
+}
+
+impl<T: Clone + Copy> DataBoard<T> {
+    pub fn new(it: T) -> Self {
+        Self([it; _])
     }
 }

@@ -1,5 +1,5 @@
 pub mod coord_notation;
-pub mod gfen;
+pub mod fen;
 pub mod square;
 pub mod std_alg_notation;
 
@@ -16,7 +16,7 @@ use crate::model::{
     BoardFile, BoardRank, CastlingDirection, ChessMove, ChessOfficer, PawnPromotion, Square,
 };
 
-trait Parsable: Sized {
+pub trait Parsable: Sized {
     fn parser<'s>() -> impl Parser<'s, &'s str, Self>;
 }
 
