@@ -1,4 +1,4 @@
-pub mod fen;
+pub mod square;
 
 use std::fmt::Display;
 

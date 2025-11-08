@@ -1,4 +1,4 @@
-use strum::{EnumIs, VariantArray, VariantNames};
+use strum::{EnumIs, EnumIter, VariantArray, VariantNames};
 
 /// Representation of the squares on a chessboard.
 ///
@@ -10,7 +10,7 @@ use strum::{EnumIs, VariantArray, VariantNames};
 /// This is the so called file-major little-endian layout.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash,
-     VariantNames)]
+     VariantNames, EnumIter)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum Square {
@@ -35,42 +35,46 @@ impl Square {
     /// extraneous bits.
     #[inline]
     pub fn from_u8(ix: u8) -> Self {
-        unsafe { std::mem::transmute::<u8, Square>(ix & 0x3Fu8) }
+        unsafe { std::mem::transmute::<u8, Self>(ix & 0x3Fu8) }
     }
 
     /// Split a square into file and rank
     #[inline]
-    pub fn split(self) -> (BoardFile, BoardRank) {
-        unsafe {
-            (
-                std::mem::transmute(self as u8 & 0x7),
-                std::mem::transmute((self as u8 & 0x38) >> 3),
-            )
-        }
+    pub fn coords(self) -> (BoardFile, BoardRank) {
+        (
+            BoardFile::from_u8(self as u8),
+            BoardRank::from_u8((self as u8 & 0x38) >> 3),
+        )
+    }
+
+    /// Split a square into file and rank
+    #[inline]
+    pub fn from_coords(f: BoardFile, r: BoardRank) -> Self {
+        Self::from_u8(f as u8 | (r as u8) << 3)
     }
 
     /// Mirror chessboard north to south
     #[inline]
     pub fn mirror_ns(self) -> Self {
-        unsafe { std::mem::transmute::<u8, Square>(self as u8 ^ 0x38u8) }
+        Self::from_u8(self as u8 ^ 0x38u8)
     }
 
     /// Mirror chessboard east to west
     #[inline]
     pub fn mirror_ew(self) -> Self {
-        unsafe { std::mem::transmute::<u8, Square>(self as u8 ^ 0x7u8) }
+        Self::from_u8(self as u8 ^ 0x7u8)
     }
 
     /// Rotate chessboard 180 degrees
     #[inline]
     pub fn rotate(self) -> Self {
-        unsafe { std::mem::transmute::<u8, Square>(63u8 - self as u8) }
+        Self::from_u8(63u8 - self as u8)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
-enum BoardRank {
+pub enum BoardRank {
     _1 = 0,
     _2 = 1,
     _3 = 2,
@@ -87,12 +91,19 @@ impl BoardRank {
     pub fn ix(self) -> usize {
         (self as usize) << 3
     }
+
+    /// Infallible conversion from a u8 by way of truncating the
+    /// extraneous bits.
+    #[inline]
+    pub fn from_u8(ix: u8) -> Self {
+        unsafe { std::mem::transmute::<u8, Self>(ix & 0x7) }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-enum BoardFile {
+pub enum BoardFile {
     a_ = 0,
     b_ = 1,
     c_ = 2,
@@ -108,6 +119,13 @@ impl BoardFile {
     #[inline]
     pub fn ix(self) -> usize {
         self as usize
+    }
+
+    /// Infallible conversion from a u8 by way of truncating the
+    /// extraneous bits.
+    #[inline]
+    pub fn from_u8(ix: u8) -> Self {
+        unsafe { std::mem::transmute::<u8, Self>(ix & 0x7) }
     }
 }
 
