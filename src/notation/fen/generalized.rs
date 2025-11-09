@@ -59,10 +59,44 @@ impl GFen {
     }
 }
 
-pub fn gfen_board<'s>(
+pub(crate) fn gfen_castling<'s, CastlingThing>()
+-> impl Parser<'s, &'s str, Vec<ColorCase<CastlingThing>>>
+where
+    CastlingThing: Clone + 's,
+    ColorCase<CastlingThing>: Parsable,
+{
+    choice((
+        just('-').to(vec![]),
+        ColorCase::<CastlingThing>::parser()
+            .repeated()
+            .at_least(1)
+            .at_most(4)
+            .collect(),
+    ))
+    .boxed()
+}
+
+pub(crate) fn gfen_8x8_board<'s, ChessThing>(
+    man: impl Parser<'s, &'s str, ChessThing> + 's,
+) -> impl Parser<'s, &'s str, DataBoard<Option<ChessThing>>>
+where
+    ChessThing: Clone + 's,
+{
+    gfen_board(8..=8, 8..=8, man).map(|v| {
+        let mut b = DataBoard::new(|| None);
+        b.0.clone_from_slice(&v.concat());
+        b
+    })
+}
+
+pub(crate) fn gfen_board<'s, ChessThing>(
     files: impl RangeBounds<usize> + 's,
     ranks: impl RangeBounds<usize> + 's,
-) -> impl Parser<'s, &'s str, Vec<Vec<Option<ChessMan>>>> {
+    man: impl Parser<'s, &'s str, ChessThing> + 's,
+) -> impl Parser<'s, &'s str, Vec<Vec<Option<ChessThing>>>>
+where
+    ChessThing: Clone + 's,
+{
     let at_least = match ranks.start_bound().copied() {
         Bound::Included(n) => n,
         Bound::Excluded(n) => n.saturating_add(1),
@@ -75,7 +109,7 @@ pub fn gfen_board<'s>(
         Bound::Unbounded => usize::MAX,
     };
 
-    gfen_line(files)
+    gfen_line(files, man)
         .separated_by(just('/').labelled("solidus (/)"))
         .at_least(at_least)
         .at_most(at_most)
@@ -85,19 +119,22 @@ pub fn gfen_board<'s>(
 
 #[test]
 fn gfen_board_test() {
-    println!("{:?}", gfen_board(3..=100, 2..=2).parse("kQk/qKq"))
+    println!(
+        "{:?}",
+        gfen_board(3..=100, 2..=2, fen_chessman()).parse("kQk/qKq")
+    )
 }
 
-pub fn gfen_line<'s>(
+pub(crate) fn gfen_line<'s, ChessThing>(
     range: impl RangeBounds<usize> + 's,
-) -> impl Parser<'s, &'s str, Vec<Option<ChessMan>>> {
+    man: impl Parser<'s, &'s str, ChessThing> + 's,
+) -> impl Parser<'s, &'s str, Vec<Option<ChessThing>>>
+where
+    ChessThing: Clone + 's,
+{
     let int_range = (Bound::Excluded(0), range.end_bound().copied());
     choice((
-        fen_chessman()
-            .map(|c| Some(c))
-            .repeated()
-            .at_least(1)
-            .collect(),
+        man.map(|c| Some(c)).repeated().at_least(1).collect(),
         integer(int_range).map(|n| vec![None; n]),
     ))
     .repeated()
@@ -109,7 +146,10 @@ pub fn gfen_line<'s>(
 
 #[test]
 fn gfen_line_test() {
-    println!("{:?}", gfen_line(3..=100).parse("kQk22Kq22"))
+    println!(
+        "{:?}",
+        gfen_line(3..=100, fen_chessman()).parse("kQk22Kq22")
+    )
 }
 
 pub fn integer<'s>(range: impl RangeBounds<usize> + 's) -> impl Parser<'s, &'s str, usize> {

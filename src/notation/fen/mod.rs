@@ -53,7 +53,10 @@ use chumsky::{prelude::*, text::Char};
 
 use crate::{
     model::*,
-    notation::{Parsable, fen::generalized::gfen_board},
+    notation::{
+        Parsable,
+        fen::generalized::{gfen_8x8_board, gfen_board, gfen_castling},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -89,23 +92,25 @@ impl FenBoard {
 impl Parsable for FenBoard {
     fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
         group((
-            fen_board(),
-            fen_color(),
-            fen_castling(),
-            fen_epc_square(),
-            fen_halfmove(),
+            fen_board().then_ignore(ws()),
+            fen_color().then_ignore(ws()),
+            gfen_castling().then_ignore(ws()),
+            fen_epc_square().then_ignore(ws()),
+            fen_halfmove().then_ignore(ws()),
             fen_turn(),
         ))
+        .padded()
         .map_group(Self::new)
+        .boxed()
     }
 }
 
+fn ws<'s>() -> impl Parser<'s, &'s str, ()> {
+    chumsky::text::whitespace().at_least(1)
+}
+
 fn fen_board<'s>() -> impl Parser<'s, &'s str, DataBoard<Option<ChessMan>>> {
-    gfen_board(8..=8, 8..=8).map(|v| {
-        let mut b = DataBoard::new(None);
-        b.0.copy_from_slice(&v.concat());
-        b
-    })
+    gfen_8x8_board(fen_chessman())
 }
 
 fn fen_color<'s>() -> impl Parser<'s, &'s str, ChessColor> {
@@ -117,18 +122,6 @@ fn fen_color<'s>() -> impl Parser<'s, &'s str, ChessColor> {
     .boxed()
 }
 
-fn fen_castling<'s>() -> impl Parser<'s, &'s str, Vec<ColorCase<CastlingDirection>>> {
-    choice((
-        just('-').to(vec![]),
-        ColorCase::<CastlingDirection>::parser()
-            .repeated()
-            .at_least(1)
-            .at_most(4)
-            .collect(),
-    ))
-    .boxed()
-}
-
 fn fen_epc_square<'s>() -> impl Parser<'s, &'s str, Option<Square>> {
     choice((just('-').to(None), Square::parser().map(|s| Some(s)))).boxed()
 }
@@ -137,12 +130,14 @@ fn fen_halfmove<'s>() -> impl Parser<'s, &'s str, u8> {
     chumsky::text::int(10)
         .try_map(|i, _| u8::from_str_radix(i, 10).map_err(|_| EmptyErr::default()))
         .labelled("expected integer")
+        .boxed()
 }
 
 fn fen_turn<'s>() -> impl Parser<'s, &'s str, u16> {
     chumsky::text::int(10)
         .try_map(|i, _| u16::from_str_radix(i, 10).map_err(|_| EmptyErr::default()))
         .labelled("expected integer")
+        .boxed()
 }
 
 #[test]
@@ -176,6 +171,7 @@ impl Parsable for ColorCase<CastlingDirection> {
             just('Q').to(White(EAST)),
         ))
         .labelled("expected on of K, k, Q, q")
+        .boxed()
     }
 }
 

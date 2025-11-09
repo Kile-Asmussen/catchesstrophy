@@ -1,4 +1,4 @@
-//! # Extended FEN notation
+//! # Extended FEN
 //!
 //! X-FEN is a FEN-inspired notation which is partially backwards-compatible with
 //! plain FEN, while being able to also describe Chess960 positions, and

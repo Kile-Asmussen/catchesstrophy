@@ -1,3 +1,5 @@
+use std::array;
+
 use strum::{EnumIs, EnumIter, VariantArray, VariantNames};
 
 /// Representation of the squares on a chessboard.
@@ -781,8 +783,8 @@ impl<T> DataBoard<T> {
     }
 }
 
-impl<T: Clone + Copy> DataBoard<T> {
-    pub fn new(it: T) -> Self {
-        Self([it; _])
+impl<T> DataBoard<T> {
+    pub fn new(mut it: impl FnMut() -> T) -> Self {
+        Self(array::from_fn(move |_| it()))
     }
 }
