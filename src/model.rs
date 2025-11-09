@@ -781,6 +781,11 @@ impl<T> DataBoard<T> {
     pub fn set(&mut self, sq: Square, it: T) {
         self.0[sq.ix()] = it
     }
+
+    /// Read a square
+    pub fn get(&self, sq: Square) -> &T {
+        &self.0[sq.ix()]
+    }
 }
 
 impl<T> DataBoard<T> {

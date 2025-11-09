@@ -76,7 +76,6 @@ impl Parsable for StdExtFenBoard {
             fen_halfmove().then_ignore(ws()),
             fen_turn(),
         ))
-        .padded()
         .map_group(Self::new)
         .boxed()
     }
@@ -121,7 +120,6 @@ impl Parsable for KnightedExtFenBoard {
             fen_halfmove().then_ignore(ws()),
             fen_turn(),
         ))
-        .padded()
         .map_group(Self::new)
         .boxed()
     }

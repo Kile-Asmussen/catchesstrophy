@@ -49,6 +49,8 @@ pub mod generalized;
 pub mod shredder;
 pub mod xtended;
 
+use std::collections::HashSet;
+
 use chumsky::{prelude::*, text::Char};
 
 use crate::{
@@ -87,6 +89,86 @@ impl FenBoard {
             turn,
         }
     }
+
+    pub fn sanity_check(&self) -> Result<(), String> {
+        if self.castling_rights.len()
+            != self
+                .castling_rights
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>()
+                .len()
+        {
+            Err("duplicate in castling rights field")?;
+        }
+
+        self.castling_check(ColorCase::White(CastlingDirection::EAST))?;
+        self.castling_check(ColorCase::Black(CastlingDirection::EAST))?;
+        self.castling_check(ColorCase::White(CastlingDirection::WEST))?;
+        self.castling_check(ColorCase::Black(CastlingDirection::WEST))?;
+
+        self.epc_check()?;
+
+        return Ok(());
+    }
+
+    fn epc_check(&self) -> Result<(), String> {
+        if let Some(sq) = self.en_passant {
+            match (self.to_move, sq.coords().1) {
+                (ChessColor::WHITE, BoardRank::_3) => return Ok(()),
+                (ChessColor::BLACK, BoardRank::_6) => return Ok(()),
+                _ => {}
+            }
+        }
+
+        Err("illegal en-passant square".to_string())
+    }
+
+    fn castling_check(&self, c: ColorCase<CastlingDirection>) -> Result<(), String> {
+        use CastlingDirection::*;
+        use ChessMan::*;
+        use ColorCase::*;
+        let (k, ksq, r, rsq, col, side) = match c {
+            White(EAST) => (
+                WHITE_KING,
+                Square::e1,
+                WHITE_ROOK,
+                Square::a1,
+                "white",
+                "queenside",
+            ),
+            Black(EAST) => (
+                BLACK_KING,
+                Square::e8,
+                BLACK_ROOK,
+                Square::a8,
+                "black",
+                "queenside",
+            ),
+            White(WEST) => (
+                WHITE_KING,
+                Square::e1,
+                WHITE_ROOK,
+                Square::h1,
+                "white",
+                "kingside",
+            ),
+            Black(WEST) => (
+                BLACK_KING,
+                Square::e8,
+                BLACK_ROOK,
+                Square::h8,
+                "black",
+                "kingside",
+            ),
+        };
+
+        if self.board.get(ksq) != &Some(k) || self.board.get(rsq) != &Some(r) {
+            Err(format!("{col} cannot castle {side}"))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Parsable for FenBoard {
@@ -99,7 +181,6 @@ impl Parsable for FenBoard {
             fen_halfmove().then_ignore(ws()),
             fen_turn(),
         ))
-        .padded()
         .map_group(Self::new)
         .boxed()
     }
@@ -151,7 +232,7 @@ fn fen_board_parsing() {
     println!("{:?}", fen_board().parse("8/8/8/8/8/8/8/8"));
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ColorCase<T> {
     White(T),
     Black(T),

@@ -128,7 +128,6 @@ where
             fen_halfmove().then_ignore(ws()),
             fen_turn(),
         ))
-        .padded()
         .map_group(Self::new)
         .boxed()
     }
