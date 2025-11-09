@@ -4,6 +4,7 @@
 #![feature(bound_copied)]
 #![feature(duration_millis_float)]
 #![feature(format_args_nl)]
+#![feature(trait_alias)]
 
 use crate::bitboard::{
     attacking::FakeMoveSimplStrategy,

@@ -54,7 +54,7 @@ use chumsky::{prelude::*, text::Char};
 use crate::{
     model::*,
     notation::{
-        Parsable,
+        Parsable, Prs,
         fen::generalized::{gfen_8x8_board, gfen_board, gfen_castling},
     },
 };
@@ -90,7 +90,7 @@ impl FenBoard {
 }
 
 impl Parsable for FenBoard {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((
             fen_board().then_ignore(ws()),
             fen_color().then_ignore(ws()),
@@ -105,38 +105,44 @@ impl Parsable for FenBoard {
     }
 }
 
-fn ws<'s>() -> impl Parser<'s, &'s str, ()> {
+fn ws<'s>() -> impl Prs<'s, ()> {
     chumsky::text::whitespace().at_least(1)
 }
 
-fn fen_board<'s>() -> impl Parser<'s, &'s str, DataBoard<Option<ChessMan>>> {
+fn fen_board<'s>() -> impl Prs<'s, DataBoard<Option<ChessMan>>> {
     gfen_8x8_board(fen_chessman())
 }
 
-fn fen_color<'s>() -> impl Parser<'s, &'s str, ChessColor> {
+fn fen_color<'s>() -> impl Prs<'s, ChessColor> {
     choice((
         just('w').to(ChessColor::WHITE),
         just('b').to(ChessColor::BLACK),
     ))
-    .labelled("expected w or b")
+    .labelled("w or b")
     .boxed()
 }
 
-fn fen_epc_square<'s>() -> impl Parser<'s, &'s str, Option<Square>> {
+fn fen_epc_square<'s>() -> impl Prs<'s, Option<Square>> {
     choice((just('-').to(None), Square::parser().map(|s| Some(s)))).boxed()
 }
 
-fn fen_halfmove<'s>() -> impl Parser<'s, &'s str, u8> {
+fn fen_halfmove<'s>() -> impl Prs<'s, u8> {
     chumsky::text::int(10)
-        .try_map(|i, _| u8::from_str_radix(i, 10).map_err(|_| EmptyErr::default()))
-        .labelled("expected integer")
+        .try_map(|i, span| {
+            u8::from_str_radix(i, 10)
+                .map_err(|_| Rich::custom(span, format!("unable to parse {i} as u8")))
+        })
+        .labelled("integer")
         .boxed()
 }
 
-fn fen_turn<'s>() -> impl Parser<'s, &'s str, u16> {
+fn fen_turn<'s>() -> impl Prs<'s, u16> {
     chumsky::text::int(10)
-        .try_map(|i, _| u16::from_str_radix(i, 10).map_err(|_| EmptyErr::default()))
-        .labelled("expected integer")
+        .try_map(|i, span| {
+            u16::from_str_radix(i, 10)
+                .map_err(|_| Rich::custom(span, format!("unable to parse {i} as u16")))
+        })
+        .labelled("integer")
         .boxed()
 }
 
@@ -161,7 +167,7 @@ impl<T> ColorCase<T> {
 }
 
 impl Parsable for ColorCase<CastlingDirection> {
-    fn parser<'s>() -> impl chumsky::Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         use CastlingDirection::*;
         use ColorCase::*;
         choice((
@@ -170,12 +176,12 @@ impl Parsable for ColorCase<CastlingDirection> {
             just('q').to(Black(EAST)),
             just('Q').to(White(EAST)),
         ))
-        .labelled("expected on of K, k, Q, q")
+        .labelled("one of K, k, Q, q")
         .boxed()
     }
 }
 
-pub fn fen_chessman<'s>() -> impl Parser<'s, &'s str, ChessMan> {
+pub fn fen_chessman<'s>() -> impl Prs<'s, ChessMan> {
     use ChessMan::*;
     choice((
         just('k').to(BLACK_KING),
@@ -191,6 +197,6 @@ pub fn fen_chessman<'s>() -> impl Parser<'s, &'s str, ChessMan> {
         just('Q').to(WHITE_QUEEN),
         just('K').to(WHITE_KING),
     ))
-    .labelled("expected one of PNBRQKpnbrqk")
+    .labelled("one of PNBRQKpnbrqk")
     .boxed()
 }

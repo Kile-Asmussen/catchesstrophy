@@ -2,11 +2,11 @@ use chumsky::{Parser, prelude::*};
 
 use crate::{
     model::*,
-    notation::{CoordNotation, Parsable},
+    notation::{CoordNotation, Parsable, Prs},
 };
 
 impl Parsable for CoordNotation {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((
             Square::parser(),
             Square::parser(),
@@ -16,7 +16,7 @@ impl Parsable for CoordNotation {
     }
 }
 
-fn pawn_promotion<'s>() -> impl Parser<'s, &'s str, PawnPromotion> {
+fn pawn_promotion<'s>() -> impl Prs<'s, PawnPromotion> {
     use PawnPromotion::*;
     choice((
         just('n').to(KNIGHT),

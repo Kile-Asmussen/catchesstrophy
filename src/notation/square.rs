@@ -1,29 +1,35 @@
 use chumsky::{Parser, prelude::*};
 use strum::{IntoEnumIterator, VariantNames};
 
-use crate::{model::*, notation::Parsable};
+use crate::{
+    model::*,
+    notation::{Parsable, Prs},
+};
 
 impl Parsable for BoardFile {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         one_of('a'..='h')
             .map(|c| Self::from_u8((c as u32 - 'a' as u32) as u8))
-            .labelled("expected a file letter a ... h")
+            .labelled("a file letter a ... h")
+            .boxed()
     }
 }
 
 impl Parsable for BoardRank {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         one_of('1'..='8')
             .map(|c| Self::from_u8((c as u32 - 'a' as u32) as u8))
-            .labelled("expected a rank number 1 ... 8")
+            .labelled("a rank number 1 ... 8")
+            .boxed()
     }
 }
 
 impl Parsable for Square {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((BoardFile::parser(), BoardRank::parser()))
             .map_group(Self::from_coords)
-            .labelled("expected a valid chess board square a1 ... h8")
+            .labelled("a valid chess board square a1 ... h8")
+            .boxed()
     }
 }
 

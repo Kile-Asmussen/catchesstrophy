@@ -2,12 +2,12 @@ use std::io::empty;
 
 use crate::{
     model::{BoardFile, BoardRank, ChessOfficer, PawnPromotion, Square},
-    notation::{InCheck, Parsable, StdAlgCastling, StdAlgNotation, StdAlgOfficer, StdAlgPawn},
+    notation::{InCheck, Parsable, Prs, StdAlgCastling, StdAlgNotation, StdAlgOfficer, StdAlgPawn},
 };
 use chumsky::{container::Seq, prelude::*};
 
 impl Parsable for StdAlgNotation {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         choice((
             StdAlgPawn::parser().map(Into::into),
             StdAlgOfficer::parser().map(Into::into),
@@ -17,7 +17,7 @@ impl Parsable for StdAlgNotation {
 }
 
 impl Parsable for StdAlgPawn {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((
             BoardFile::parser().then_ignore(just('x')).or_not(),
             Square::parser(),
@@ -28,7 +28,7 @@ impl Parsable for StdAlgPawn {
     }
 }
 
-fn pawn_promotion<'s>() -> impl Parser<'s, &'s str, PawnPromotion> {
+fn pawn_promotion<'s>() -> impl Prs<'s, PawnPromotion> {
     use PawnPromotion::*;
     choice((
         just('N').to(KNIGHT),
@@ -39,7 +39,7 @@ fn pawn_promotion<'s>() -> impl Parser<'s, &'s str, PawnPromotion> {
 }
 
 impl Parsable for StdAlgOfficer {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((
             officer(),
             BoardFile::parser().or_not(),
@@ -52,7 +52,7 @@ impl Parsable for StdAlgOfficer {
     }
 }
 
-fn officer<'s>() -> impl Parser<'s, &'s str, ChessOfficer> {
+fn officer<'s>() -> impl Prs<'s, ChessOfficer> {
     use ChessOfficer::*;
     choice((
         just('N').to(KNIGHT),
@@ -63,12 +63,12 @@ fn officer<'s>() -> impl Parser<'s, &'s str, ChessOfficer> {
     ))
 }
 
-pub fn is_it<'s, T>(p: impl Parser<'s, &'s str, T>) -> impl Parser<'s, &'s str, bool> {
+pub fn is_it<'s, T>(p: impl Prs<'s, T>) -> impl Prs<'s, bool> {
     p.or_not().map(|s| s.is_some())
 }
 
 impl Parsable for StdAlgCastling {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         choice((
             just("O-O-O").ignore_then(InCheck::parser().or_not().map(StdAlgCastling::OOO)),
             just("O-O").ignore_then(InCheck::parser().or_not().map(StdAlgCastling::OO)),
@@ -77,7 +77,7 @@ impl Parsable for StdAlgCastling {
 }
 
 impl Parsable for InCheck {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         choice((just('+').to(InCheck::Check), just('#').to(InCheck::Mate)))
     }
 }

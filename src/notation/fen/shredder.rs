@@ -15,17 +15,17 @@ use chumsky::Parser;
 use crate::{
     model::{BoardFile, ChessColor, ChessMan, DataBoard, Square},
     notation::{
-        Parsable,
+        Parsable, Prs,
         fen::{
-            ColorCase, fen_board, fen_castling, fen_color, fen_epc_square, fen_halfmove, fen_turn,
-            ws,
+            ColorCase, fen_board, fen_color, fen_epc_square, fen_halfmove, fen_turn,
+            generalized::gfen_castling, ws,
         },
     },
 };
 use chumsky::prelude::*;
 
 #[derive(Debug, Clone)]
-pub struct ShredderFenBoard {
+pub struct ShrFenBoard {
     pub board: DataBoard<Option<ChessMan>>,
     pub to_move: ChessColor,
     pub castling_rights: Vec<ColorCase<BoardFile>>,
@@ -34,7 +34,7 @@ pub struct ShredderFenBoard {
     pub turn: u16,
 }
 
-impl ShredderFenBoard {
+impl ShrFenBoard {
     pub fn new(
         board: DataBoard<Option<ChessMan>>,
         to_move: ChessColor,
@@ -54,12 +54,12 @@ impl ShredderFenBoard {
     }
 }
 
-impl Parsable for ShredderFenBoard {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+impl Parsable for ShrFenBoard {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         group((
             fen_board().then_ignore(ws()),
             fen_color().then_ignore(ws()),
-            fen_castling().then_ignore(ws()),
+            gfen_castling().then_ignore(ws()),
             fen_epc_square().then_ignore(ws()),
             fen_halfmove().then_ignore(ws()),
             fen_turn(),
@@ -71,12 +71,12 @@ impl Parsable for ShredderFenBoard {
 }
 
 impl Parsable for ColorCase<BoardFile> {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self> {
+    fn parser<'s>() -> impl Prs<'s, Self> {
         use ColorCase::*;
         choice((
             BoardFile::parser().map(Black),
             one_of('A'..='H').map(|c| White(BoardFile::from_u8((c as u32 - 'H' as u32) as u8))),
         ))
-        .labelled("expected on of A ... H, a ... h")
+        .labelled("on of A ... H, a ... h")
     }
 }

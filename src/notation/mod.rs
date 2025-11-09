@@ -8,7 +8,7 @@ use std::{
     os::unix::process,
 };
 
-use chumsky::Parser;
+use chumsky::{Parser, error::Rich, extra::Err};
 use strum::VariantNames;
 use trie_rs::inc_search;
 
@@ -16,8 +16,10 @@ use crate::model::{
     BoardFile, BoardRank, CastlingDirection, ChessMove, ChessOfficer, PawnPromotion, Square,
 };
 
+pub trait Prs<'s, O> = Parser<'s, &'s str, O, Err<Rich<'s, char>>>;
+
 pub trait Parsable: Sized {
-    fn parser<'s>() -> impl Parser<'s, &'s str, Self>;
+    fn parser<'s>() -> impl Prs<'s, Self>;
 }
 
 impl Display for Square {
