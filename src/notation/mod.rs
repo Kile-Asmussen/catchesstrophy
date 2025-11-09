@@ -1,7 +1,7 @@
-pub mod coord_notation;
+pub mod coordinate;
 pub mod fen;
 pub mod square;
-pub mod std_alg_notation;
+pub mod stdalg;
 
 use std::{
     fmt::{Display, Write},
