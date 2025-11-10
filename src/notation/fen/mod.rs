@@ -49,7 +49,7 @@ pub mod generalized;
 pub mod shredder;
 pub mod xtended;
 
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt::Display};
 
 use chumsky::{prelude::*, text::Char};
 
@@ -183,6 +183,21 @@ impl Parsable for FenBoard {
         ))
         .map_group(Self::new)
         .boxed()
+    }
+}
+
+impl Display for FenBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {} {} {} {}",
+            todo!(),
+            todo!(),
+            todo!(),
+            todo!(),
+            todo!(),
+            todo!(),
+        )
     }
 }
 
